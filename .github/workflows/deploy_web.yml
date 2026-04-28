@@ -1,0 +1,44 @@
+# Path: .github/workflows/deploy_web.yml
+
+name: Deploy Admin Panel to Web
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# رێگەپێدان بە گیتهاپ بۆ بڵاوکردنەوەی وێبسایتەکە
+permissions:
+  contents: write
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+
+      # دڵنیابوونەوە لە هەبوونی فۆڵدەری وێب
+      - name: Create Web Project
+        run: flutter create --platforms web .
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      # دروستکردنی فایلی وێبسایت بە خێرایی بەرز (CanvasKit)
+      - name: Build Web
+        run: flutter build web --release --web-renderer canvaskit
+
+      # ناردنی فایلە دروستکراوەکان بۆ هۆستینگی گیتهاپ
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
