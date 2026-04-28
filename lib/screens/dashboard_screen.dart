@@ -3,7 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_login.dart';
-import 'manage_users.dart'; // فایلی داهاتوو
+import 'manage_users.dart';
+import 'settings_screen.dart'; // <--- ئەمەمان زیاد کرد
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,12 +16,13 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
 
-  // ئەو شاشانەی کە ئەدمین دەیانبینێت
+  // لیستەکەمان نوێ کردەوە بۆ ئەوەی بەشی رێکخستنەکانی تێدابێت
   final List<Widget> _pages = [
-    const Center(child: Text('ئامارە گشتییەکان لێرە دەردەکەون (ژمارەی ئۆردەر، قازانج...)', style: TextStyle(fontSize: 24))),
-    const ManageUsersScreen(), // شاشەی کۆنترۆڵکردنی شۆفێر و خوارنگەهـ
+    const Center(child: Text('ئامارە گشتییەکان لێرە دەردەکەون', style: TextStyle(fontSize: 24))),
+    const ManageUsersScreen(),
     const Center(child: Text('شاشەی کۆنترۆڵکردنی ئۆردەرەکان لێرە دەبێت')),
-    const Center(child: Text('شاشەی حیسابات و پاکتاوکردن لێرە دەبێت')),
+    const Center(child: Text('شاشەی حیسابات لێرە دەبێت')),
+    const SettingsScreen(), // <--- شاشە دینامیکییەکە لێرە داناوە
   ];
 
   void _logout() async {
@@ -41,7 +43,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Row(
         children: [
-          // لیستی لاتەنیشت بۆ وێب
           NavigationRail(
             selectedIndex: _selectedIndex,
             onDestinationSelected: (int index) {
@@ -55,10 +56,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               NavigationRailDestination(icon: Icon(Icons.people), label: Text('بەکارهێنەران')),
               NavigationRailDestination(icon: Icon(Icons.delivery_dining), label: Text('ئۆردەرەکان')),
               NavigationRailDestination(icon: Icon(Icons.account_balance_wallet), label: Text('دارایی')),
+              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('رێکخستن')), // <--- دوگمەی نوێ
             ],
           ),
           const VerticalDivider(thickness: 1, width: 1),
-          // پیشاندانی شاشەی هەڵبژێردراو
           Expanded(
             child: _pages[_selectedIndex],
           ),
