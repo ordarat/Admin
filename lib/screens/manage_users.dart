@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -14,29 +16,51 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  String _userType = 'Drivers'; // دەتوانرێت بکرێتە 'Restaurants'
+  String _userType = 'Drivers'; 
+  bool _isLoading = false;
 
-  // فەنکشنی دروستکردنی ئەکاونت لەلایەن ئەدمینەوە
+  // فەنکشنی نوێکراوە بۆ دروستکردنی ئەکاونت لە هەردوو بەشی Auth و Firestore
   Future<void> _createUser() async {
-    if (_nameController.text.isEmpty || _phoneController.text.isEmpty) return;
+    if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _passwordController.text.isEmpty) return;
+
+    setState(() { _isLoading = true; });
 
     try {
-      // پاشەکەوتکردن لە ناو فایەربەیس داتابەیس
-      await FirebaseFirestore.instance.collection(_userType).doc().set({
+      // دروستکردنی ئیمەیڵە وەهمییەکە بە هەمان شێوازی ئەپڵیکەیشنی مۆبایلەکە
+      String fakeEmail = "${_phoneController.text.trim()}@company.com";
+      String password = _passwordController.text.trim();
+
+      // ١. دروستکردنی ئەکاونتەکە لە بەشی سکیوریتی (Auth) بەبێ چوونەدەرەوەی ئەدمین
+      FirebaseApp secondaryApp = await Firebase.initializeApp(
+        name: 'SecondaryApp',
+        options: Firebase.app().options,
+      );
+      
+      UserCredential userCredential = await FirebaseAuth.instanceFor(app: secondaryApp)
+          .createUserWithEmailAndPassword(email: fakeEmail, password: password);
+          
+      // ٢. پاشەکەوتکردنی زانیارییەکان لە ناو فایەربەیس داتابەیس بە هەمان ئایدی (UID)
+      await FirebaseFirestore.instance.collection(_userType).doc(userCredential.user!.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
-        'password': _passwordController.text.trim(), // بۆ ئەوەی دواتر بیدەیتێ بیزانێت
+        'password': password, 
         'is_active': true,
         'wallet_balance': 0,
         'created_at': FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی دروست کرا')));
+      // سڕینەوەی ئەپە کاتییەکە بۆ ئەوەی ئەدمینەکە لەسەر ئیشەکەی خۆی بمێنێتەوە
+      await secondaryApp.delete();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ئەکاونتەکە بە تەواوی بۆ مۆبایل و داتابەیس دروست کرا!'), backgroundColor: Colors.green));
       _nameController.clear();
       _phoneController.clear();
       _passwordController.clear();
     } catch (e) {
-      print(e);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵەیەک روویدا: $e'), backgroundColor: Colors.red));
+    } finally {
+      setState(() { _isLoading = false; });
     }
   }
 
@@ -47,7 +71,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // بەشی دروستکردنی بەکارهێنەری نوێ
           Expanded(
             flex: 1,
             child: Card(
@@ -74,10 +97,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     const SizedBox(height: 15),
                     TextField(controller: _passwordController, decoration: const InputDecoration(labelText: 'وشەی نهێنی (بۆ پێدانی بە کەسەکە)', border: OutlineInputBorder())),
                     const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: _createUser,
-                      child: const Padding(padding: EdgeInsets.all(12.0), child: Text('تۆمارکردن', style: TextStyle(fontSize: 18))),
-                    ),
+                    _isLoading 
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton(
+                          onPressed: _createUser,
+                          child: const Padding(padding: EdgeInsets.all(12.0), child: Text('تۆمارکردن', style: TextStyle(fontSize: 18))),
+                        ),
                   ],
                 ),
               ),
@@ -85,7 +110,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           ),
           const SizedBox(width: 20),
           
-          // بەشی پیشاندانی لیستی بەکارهێنەران لە داتابەیسەوە
           Expanded(
             flex: 2,
             child: Card(
@@ -113,7 +137,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                               trailing: Switch(
                                 value: userData['is_active'] ?? true,
                                 onChanged: (bool value) {
-                                  // لێرەوە بە یەک کلیک دەتوانیت ئەکاونتێک رابگریت (Block)
                                   FirebaseFirestore.instance.collection(_userType).doc(users[index].id).update({'is_active': value});
                                 },
                               ),
