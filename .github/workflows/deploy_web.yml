@@ -25,9 +25,9 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
-      # دڵنیابوونەوە لە هەبوونی فۆڵدەری وێب
+      # --- چارەسەری کێشەکە لێرەدایە: ناوی پڕۆژەکەمان بە پیتی بچووک دیاری کرد ---
       - name: Create Web Project
-        run: flutter create --platforms web .
+        run: flutter create --project-name admin_panel --platforms web .
 
       - name: Get Dependencies
         run: flutter pub get
