@@ -19,27 +19,29 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   String _userType = 'Drivers'; 
   bool _isLoading = false;
 
-  // فەنکشنی نوێکراوە بۆ دروستکردنی ئەکاونت لە هەردوو بەشی Auth و Firestore
   Future<void> _createUser() async {
     if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _passwordController.text.isEmpty) return;
 
     setState(() { _isLoading = true; });
 
     try {
-      // دروستکردنی ئیمەیڵە وەهمییەکە بە هەمان شێوازی ئەپڵیکەیشنی مۆبایلەکە
       String fakeEmail = "${_phoneController.text.trim()}@company.com";
       String password = _passwordController.text.trim();
 
-      // ١. دروستکردنی ئەکاونتەکە لە بەشی سکیوریتی (Auth) بەبێ چوونەدەرەوەی ئەدمین
-      FirebaseApp secondaryApp = await Firebase.initializeApp(
-        name: 'SecondaryApp',
-        options: Firebase.app().options,
-      );
+      // بەکارهێنانی رێگەیەکی سەلامەتتر بۆ بانگکردنی ئەپی دووەم بەبێ پچڕانی هێڵ
+      FirebaseApp secondaryApp;
+      try {
+        secondaryApp = Firebase.app('SecondaryApp');
+      } catch (e) {
+        secondaryApp = await Firebase.initializeApp(
+          name: 'SecondaryApp',
+          options: Firebase.app().options,
+        );
+      }
       
       UserCredential userCredential = await FirebaseAuth.instanceFor(app: secondaryApp)
           .createUserWithEmailAndPassword(email: fakeEmail, password: password);
           
-      // ٢. پاشەکەوتکردنی زانیارییەکان لە ناو فایەربەیس داتابەیس بە هەمان ئایدی (UID)
       await FirebaseFirestore.instance.collection(_userType).doc(userCredential.user!.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -49,16 +51,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'created_at': FieldValue.serverTimestamp(),
       });
 
-      // سڕینەوەی ئەپە کاتییەکە بۆ ئەوەی ئەدمینەکە لەسەر ئیشەکەی خۆی بمێنێتەوە
-      await secondaryApp.delete();
-
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ئەکاونتەکە بە تەواوی بۆ مۆبایل و داتابەیس دروست کرا!'), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی تۆمار کرا!'), backgroundColor: Colors.green));
       _nameController.clear();
       _phoneController.clear();
       _passwordController.clear();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵەیەک روویدا: $e'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵە: $e'), backgroundColor: Colors.red));
     } finally {
       setState(() { _isLoading = false; });
     }
