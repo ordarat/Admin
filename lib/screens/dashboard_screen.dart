@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_login.dart';
 import 'manage_users.dart';
-import 'settings_screen.dart'; // <--- ئەمەمان زیاد کرد
+import 'manage_orders.dart'; // فایلی نوێ
+import 'live_tracking.dart'; // فایلی نوێ
+import 'settings_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -16,13 +18,13 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
 
-  // لیستەکەمان نوێ کردەوە بۆ ئەوەی بەشی رێکخستنەکانی تێدابێت
   final List<Widget> _pages = [
-    const Center(child: Text('ئامارە گشتییەکان لێرە دەردەکەون', style: TextStyle(fontSize: 24))),
+    const Center(child: Text('ئامارە گشتییەکان (بە زوویی زیاد دەکرێت)', style: TextStyle(fontSize: 24))),
     const ManageUsersScreen(),
-    const Center(child: Text('شاشەی کۆنترۆڵکردنی ئۆردەرەکان لێرە دەبێت')),
+    const ManageOrdersScreen(), // شاشەی چاودێری ئۆردەرەکان
+    const LiveTrackingScreen(), // شاشەی ئامادەکراوی نەخشە
     const Center(child: Text('شاشەی حیسابات لێرە دەبێت')),
-    const SettingsScreen(), // <--- شاشە دینامیکییەکە لێرە داناوە
+    const SettingsScreen(),
   ];
 
   void _logout() async {
@@ -35,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ordarat - Admin Control Panel', style: TextStyle(color: Colors.white)),
+        title: const Text('Ordarat - Admin Command Center', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.indigo,
         actions: [
           IconButton(icon: const Icon(Icons.logout, color: Colors.white), onPressed: _logout),
@@ -45,24 +47,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           NavigationRail(
             selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() { _selectedIndex = index; });
-            },
+            onDestinationSelected: (int index) => setState(() => _selectedIndex = index),
             labelType: NavigationRailLabelType.all,
             backgroundColor: Colors.white,
             elevation: 5,
             destinations: const [
               NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('داشبۆرد')),
               NavigationRailDestination(icon: Icon(Icons.people), label: Text('بەکارهێنەران')),
-              NavigationRailDestination(icon: Icon(Icons.delivery_dining), label: Text('ئۆردەرەکان')),
+              NavigationRailDestination(icon: Icon(Icons.receipt_long), label: Text('ئۆردەرەکان')),
+              NavigationRailDestination(icon: Icon(Icons.map), label: Text('نەخشە (Live)')), // تابی نوێ
               NavigationRailDestination(icon: Icon(Icons.account_balance_wallet), label: Text('دارایی')),
-              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('رێکخستن')), // <--- دوگمەی نوێ
+              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('رێکخستن')),
             ],
           ),
           const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: _pages[_selectedIndex],
-          ),
+          Expanded(child: _pages[_selectedIndex]),
         ],
       ),
     );
