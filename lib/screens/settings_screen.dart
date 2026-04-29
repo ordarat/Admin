@@ -20,7 +20,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadSettings();
   }
 
-  // هێنانی ژمارە کۆنەکە بۆ ناو خانەکە
   Future<void> _loadSettings() async {
     var doc = await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').get();
     if (doc.exists && doc.data() != null) {
@@ -30,8 +29,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // سەیڤکردنی ژمارە نوێیەکە
   Future<void> _saveSettings() async {
+    if (_whatsappController.text.isEmpty) return;
+    
     setState(() { _isLoading = true; });
     try {
       await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').set({
@@ -67,7 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   const Text('بەستەری پەیوەندیکردن (واتسئاپ)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
-                  const Text('ئەم ژمارەیە لە شاشەی لۆگینی هەموو شۆفێر و خوارنگەهەکان دەردەکەوێت بۆ ئەوەی راستەوخۆ نامەت بۆ بنێرن. (بۆ نموونە: 9647501234567)', style: TextStyle(color: Colors.grey)),
+                  const Text('ئەم ژمارەیە لە شاشەی لۆگینی هەموو شۆفێر و خوارنگەهەکان دەردەکەوێت. (بۆ نموونە: 9647503334353)', style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 20),
                   
                   Row(
