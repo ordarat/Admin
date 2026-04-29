@@ -13,17 +13,16 @@ class ManageUsersScreen extends StatefulWidget {
 }
 
 class _ManageUsersScreenState extends State<ManageUsersScreen> {
-  // کۆنترۆڵەرەکان بۆ زانیارییە سەرەکییەکان
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
-  // کۆنترۆڵەرە نوێیەکان بۆ دانانی لینکی وێنەکان
+  // کۆنترۆڵەرەکان بۆ دانانی لینکی وێنەکان بە دەست
   final TextEditingController _profileImageLinkCtrl = TextEditingController();
-  final TextEditingController _idCardController = TextEditingController(); // بۆ ژمارەی ناسنامە
-  final TextEditingController _idCardLinkCtrl = TextEditingController(); // بۆ لینکی وێنەی ناسنامە
-  final TextEditingController _drivingLicenseController = TextEditingController(); // بۆ ژمارەی مۆڵەت
-  final TextEditingController _licenseLinkCtrl = TextEditingController(); // بۆ لینکی وێنەی مۆڵەت
+  final TextEditingController _idCardController = TextEditingController(); 
+  final TextEditingController _idCardLinkCtrl = TextEditingController(); 
+  final TextEditingController _drivingLicenseController = TextEditingController(); 
+  final TextEditingController _licenseLinkCtrl = TextEditingController(); 
   
   String _userType = 'Drivers'; 
   bool _isLoading = false;
@@ -46,7 +45,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       String fakeEmail = "${_phoneController.text.trim()}@company.com";
       String password = _passwordController.text.trim();
       
-      // وەرگرتنی لینکەکان لە خانەکانەوە
       String profileImageUrl = _profileImageLinkCtrl.text.trim();
       String idCardUrl = _idCardLinkCtrl.text.trim();
       String licenseUrl = _licenseLinkCtrl.text.trim();
@@ -68,7 +66,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'is_active': true,
         'is_archived': false, 
         'wallet_balance': 0, 
-        'profile_image': profileImageUrl, // لینکی وێنەی پڕۆفایل
+        'profile_image': profileImageUrl, 
         'created_at': FieldValue.serverTimestamp(),
       };
 
@@ -78,17 +76,18 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           'vehicle_type': 'ماتۆڕسکیل', 
           'id_card': _idCardController.text.trim(),
           'driving_license': _drivingLicenseController.text.trim(),
-          'id_card_url': idCardUrl, // لینکی وێنەی ناسنامە
-          'driving_license_url': licenseUrl, // لینکی وێنەی مۆڵەت
+          'id_card_url': idCardUrl, 
+          'driving_license_url': licenseUrl, 
         });
       }
 
       await FirebaseFirestore.instance.collection(_userType).doc(userCredential.user!.uid).set(userData);
 
+      await secondaryApp.delete();
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی تۆمار کرا!'), backgroundColor: Colors.green));
       
-      // پاککردنەوەی هەموو خانەکان
       _nameController.clear();
       _phoneController.clear();
       _passwordController.clear();
@@ -359,11 +358,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       TextField(controller: _passwordController, decoration: const InputDecoration(labelText: 'وشەی نهێنی', border: OutlineInputBorder())),
                       const SizedBox(height: 15),
                       
-                      // خانەی دانانی لینکی وێنەی پڕۆفایل
                       TextField(
                         controller: _profileImageLinkCtrl, 
                         decoration: const InputDecoration(
-                          labelText: 'لینکی وێنەی پڕۆفایل (ئارەزوومەندانە)', 
+                          labelText: 'لینکی وێنەی پڕۆفایل', 
                           border: OutlineInputBorder(), 
                           prefixIcon: Icon(Icons.link, color: Colors.indigo)
                         )
