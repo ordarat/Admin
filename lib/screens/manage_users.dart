@@ -97,6 +97,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
       await FirebaseFirestore.instance.collection(_userType).doc(userCredential.user!.uid).set(userData);
 
+      await secondaryApp.delete();
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی تۆمار کرا!'), backgroundColor: Colors.green));
       
@@ -161,7 +163,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەژماری ($name) گەڕێندرایەوە!'), backgroundColor: Colors.green));
   }
 
-  // --- فەنکشنی نوێ بۆ کردنەوەی پڕۆفایل و راپۆرتی کارەکان ---
   void _showUserProfileReport(String userId, Map<String, dynamic> userData) {
     String fieldToQuery = _userType == 'Drivers' ? 'driver_id' : 'restaurant_id';
     String? imageUrl = userData['profile_image'];
@@ -178,7 +179,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // بەشی سەرەوە: زانیارییە کەسییەکان
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -208,19 +208,15 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   ],
                 ),
                 const Divider(height: 30, thickness: 2),
-                
-                // بەشی خوارەوە: لیستی ئۆردەرەکان
                 const Text('راپۆرتی کارەکان (ئۆردەرەکان)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
-                    // هێنانی ئەو ئۆردەرانەی پەیوەندیان بەم کەسەوە هەیە
                     stream: FirebaseFirestore.instance.collection('Orders').where(fieldToQuery, isEqualTo: userId).snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                       if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text('هیچ ئۆردەرێکی تۆمارکراو نییە بۆ ئەم کەسە.', style: TextStyle(color: Colors.grey, fontSize: 16)));
 
-                      // ریزکردنی ناوخۆیی (بەبێ دروستکردنی کێشەی ئیندێکس لە فایەربەیس)
                       var userOrders = snapshot.data!.docs.toList();
                       userOrders.sort((a, b) {
                         Timestamp? timeA = (a.data() as Map)['created_at'] as Timestamp?;
@@ -233,7 +229,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                         itemCount: userOrders.length,
                         itemBuilder: (context, index) {
                           var order = userOrders[index].data() as Map<String, dynamic>;
-                          
                           Color statusColor = order['status'] == 'pending' ? Colors.red : order['status'] == 'accepted' ? Colors.blue : Colors.green;
                           String statusText = order['status'] == 'pending' ? 'چاوەڕوانە' : order['status'] == 'accepted' ? 'لە رێگایە' : 'گەیەندراوە';
 
@@ -270,7 +265,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // بەشی فۆڕمی دروستکردن
           Expanded(
             flex: 1,
             child: Card(
@@ -342,7 +336,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           ),
           const SizedBox(width: 20),
           
-          // بەشی لیستی بەکارهێنەران و ئەرشیڤ
           Expanded(
             flex: 2,
             child: Card(
@@ -387,7 +380,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                             String userName = userData['name'] ?? 'بێ ناو';
                             
                             return ListTile(
-                              // لێرەدا فەنکشنەکەمان بەستەوە بە کلیککردن لەسەر هەر ناوێک
                               onTap: () => _showUserProfileReport(userId, userData),
                               leading: CircleAvatar(
                                 radius: 25,
