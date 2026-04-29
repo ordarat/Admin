@@ -24,7 +24,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   
   String _userType = 'Drivers'; 
   bool _isLoading = false;
-  bool _showArchived = false; // گۆڕاوێکی نوێ بۆ بینینی ئەرشیڤکراوەکان
+  bool _showArchived = false; 
   
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
@@ -80,7 +80,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'phone': _phoneController.text.trim(),
         'password': password, 
         'is_active': true,
-        'is_archived': false, // لە سەرەتادا ئەرشیڤ نەکراوە
+        'is_archived': false, 
         'wallet_balance': 0, 
         'profile_image': profileImageUrl, 
         'created_at': FieldValue.serverTimestamp(),
@@ -135,25 +135,19 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // فەنکشنی نوێ بۆ ئەرشیڤکردن (سڕینەوەی نەرم)
   void _archiveUser(String userId, String name) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('ئەرشیڤکردنی بەکارهێنەر', style: TextStyle(color: Colors.red)),
-        content: Text('ئایا دڵنیایت دەتەوێت ($name) لاببەیت؟ بەم کارە ئەکاونتەکەی رادەگیرێت و دەچێتە بەشی ئەرشیڤەوە.'),
+        content: Text('ئایا دڵنیایت دەتەوێت ($name) لاببەیت؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
-              // ئەکاونتەکە رادەگرین و دەیکەینە ئەرشیڤ
-              FirebaseFirestore.instance.collection(_userType).doc(userId).update({
-                'is_archived': true,
-                'is_active': false,
-              });
+              FirebaseFirestore.instance.collection(_userType).doc(userId).update({'is_archived': true, 'is_active': false});
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('خرایە ناو ئەرشیڤەوە')));
             },
             child: const Text('بەڵێ، ئەرشیڤی بکە', style: TextStyle(color: Colors.white)),
           ),
@@ -162,13 +156,111 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // فەنکشنی نوێ بۆ گەڕاندنەوە لە ئەرشیڤ
   void _restoreUser(String userId, String name) {
-    FirebaseFirestore.instance.collection(_userType).doc(userId).update({
-      'is_archived': false,
-      'is_active': true,
-    });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەژماری ($name) گەڕێندرایەوە ناو لیستی چالاکەکان!'), backgroundColor: Colors.green));
+    FirebaseFirestore.instance.collection(_userType).doc(userId).update({'is_archived': false, 'is_active': true});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەژماری ($name) گەڕێندرایەوە!'), backgroundColor: Colors.green));
+  }
+
+  // --- فەنکشنی نوێ بۆ کردنەوەی پڕۆفایل و راپۆرتی کارەکان ---
+  void _showUserProfileReport(String userId, Map<String, dynamic> userData) {
+    String fieldToQuery = _userType == 'Drivers' ? 'driver_id' : 'restaurant_id';
+    String? imageUrl = userData['profile_image'];
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            width: 800,
+            height: 700,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // بەشی سەرەوە: زانیارییە کەسییەکان
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.indigo[100],
+                      backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
+                      child: (imageUrl == null || imageUrl.isEmpty) ? Icon(_userType == 'Drivers' ? Icons.motorcycle : Icons.restaurant, size: 50, color: Colors.indigo) : null,
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(userData['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                          Text('مۆبایل: ${userData['phone']} | باڵانس: ${userData['wallet_balance'] ?? 0} IQD', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                          const SizedBox(height: 10),
+                          if (_userType == 'Drivers') ...[
+                            Text('ناسنامە: ${userData['id_card'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                            Text('مۆڵەت: ${userData['driving_license'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                            Text('کۆی گەیاندنەکان: ${userData['completed_orders'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                          ]
+                        ],
+                      ),
+                    ),
+                    IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => Navigator.pop(context)),
+                  ],
+                ),
+                const Divider(height: 30, thickness: 2),
+                
+                // بەشی خوارەوە: لیستی ئۆردەرەکان
+                const Text('راپۆرتی کارەکان (ئۆردەرەکان)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    // هێنانی ئەو ئۆردەرانەی پەیوەندیان بەم کەسەوە هەیە
+                    stream: FirebaseFirestore.instance.collection('Orders').where(fieldToQuery, isEqualTo: userId).snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text('هیچ ئۆردەرێکی تۆمارکراو نییە بۆ ئەم کەسە.', style: TextStyle(color: Colors.grey, fontSize: 16)));
+
+                      // ریزکردنی ناوخۆیی (بەبێ دروستکردنی کێشەی ئیندێکس لە فایەربەیس)
+                      var userOrders = snapshot.data!.docs.toList();
+                      userOrders.sort((a, b) {
+                        Timestamp? timeA = (a.data() as Map)['created_at'] as Timestamp?;
+                        Timestamp? timeB = (b.data() as Map)['created_at'] as Timestamp?;
+                        if (timeA == null || timeB == null) return 0;
+                        return timeB.compareTo(timeA);
+                      });
+
+                      return ListView.builder(
+                        itemCount: userOrders.length,
+                        itemBuilder: (context, index) {
+                          var order = userOrders[index].data() as Map<String, dynamic>;
+                          
+                          Color statusColor = order['status'] == 'pending' ? Colors.red : order['status'] == 'accepted' ? Colors.blue : Colors.green;
+                          String statusText = order['status'] == 'pending' ? 'چاوەڕوانە' : order['status'] == 'accepted' ? 'لە رێگایە' : 'گەیەندراوە';
+
+                          return Card(
+                            color: Colors.grey[50],
+                            child: ListTile(
+                              leading: Icon(Icons.receipt_long, color: statusColor),
+                              title: Text('کڕیار: ${order['customer_name']}'),
+                              subtitle: Text('نرخ: ${order['food_price']} IQD | ناونیشان: ${order['address']}'),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(color: statusColor.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                                child: Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -190,7 +282,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     children: [
                       const Text('دروستکردنی هەژماری نوێ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 20),
-                      
                       GestureDetector(
                         onTap: _pickImage,
                         child: Stack(
@@ -211,7 +302,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-
                       DropdownButtonFormField<String>(
                         value: _userType,
                         items: const [
@@ -236,7 +326,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                         const SizedBox(height: 10),
                         TextField(controller: _drivingLicenseController, decoration: const InputDecoration(labelText: 'مۆڵەتی شۆفێری', border: OutlineInputBorder(), prefixIcon: Icon(Icons.drive_eta))),
                       ],
-                      
                       const SizedBox(height: 20),
                       _isLoading 
                         ? const Center(child: CircularProgressIndicator())
@@ -264,15 +353,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_showArchived ? 'لیستی ئەرشیڤکراوەکان (لابراوەکان)' : 'لیستی تۆمارکراوە چالاکەکان', 
+                        Text(_showArchived ? 'لیستی ئەرشیڤکراوەکان' : 'لیستی چالاکەکان', 
                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _showArchived ? Colors.red : Colors.indigo)),
-                        
-                        // دوگمەی گۆڕین لە نێوان لیستی چالاک و ئەرشیڤ
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(backgroundColor: _showArchived ? Colors.green : Colors.red[100], foregroundColor: _showArchived ? Colors.white : Colors.red),
                           onPressed: () => setState(() => _showArchived = !_showArchived),
                           icon: Icon(_showArchived ? Icons.arrow_back : Icons.archive),
-                          label: Text(_showArchived ? 'گەڕانەوە بۆ لیستی چالاکەکان' : 'پیشاندانی ئەرشیڤ'),
+                          label: Text(_showArchived ? 'گەڕانەوە' : 'پیشاندانی ئەرشیڤ'),
                         ),
                       ],
                     ),
@@ -283,10 +370,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                         
-                        // فلتەرکردنی لیستەکە لۆکاڵی بۆ ئەوەی کێشەی ئیندێکس دروست نەکات
                         var users = snapshot.data!.docs.where((doc) {
-                          var data = doc.data() as Map<String, dynamic>;
-                          bool isArchived = data['is_archived'] ?? false;
+                          bool isArchived = (doc.data() as Map)['is_archived'] ?? false;
                           return isArchived == _showArchived;
                         }).toList();
 
@@ -302,6 +387,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                             String userName = userData['name'] ?? 'بێ ناو';
                             
                             return ListTile(
+                              // لێرەدا فەنکشنەکەمان بەستەوە بە کلیککردن لەسەر هەر ناوێک
+                              onTap: () => _showUserProfileReport(userId, userData),
                               leading: CircleAvatar(
                                 radius: 25,
                                 backgroundColor: _showArchived ? Colors.grey[300] : Colors.indigo[100],
@@ -311,19 +398,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                     : null,
                               ),
                               title: Text(userName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _showArchived ? Colors.grey : Colors.black)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('مۆبایل: ${userData['phone']} | باڵانس: ${userData['wallet_balance'] ?? 0} IQD'),
-                                  if (_userType == 'Drivers') 
-                                    Text('ناسنامە: ${userData['id_card'] ?? 'نییە'}  |  مۆڵەت: ${userData['driving_license'] ?? 'نییە'}', 
-                                         style: TextStyle(color: _showArchived ? Colors.grey : Colors.blueGrey, fontSize: 13, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
+                              subtitle: Text('مۆبایل: ${userData['phone']} | کلیک بکە بۆ بینینی راپۆرت', style: const TextStyle(color: Colors.blue)),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // ئەگەر لەناو ئەرشیڤ بێت تەنها دوگمەی گەڕاندنەوە پیشان دەدات
                                   if (_showArchived)
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
@@ -331,7 +409,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                       icon: const Icon(Icons.restore),
                                       label: const Text('گەڕاندنەوە'),
                                     )
-                                  // ئەگەر چالاک بێت، کۆنترۆڵی تەواوی پیشان دەدات
                                   else ...[
                                     IconButton(
                                       tooltip: 'پاکتاوکردنی پارە',
@@ -344,14 +421,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                       onChanged: (bool value) => FirebaseFirestore.instance.collection(_userType).doc(userId).update({'is_active': value}),
                                     ),
                                     IconButton(
-                                      tooltip: 'لابردن و ئەرشیڤکردن',
+                                      tooltip: 'ئەرشیڤکردن',
                                       icon: const Icon(Icons.archive, color: Colors.red),
                                       onPressed: () => _archiveUser(userId, userName),
                                     ),
                                   ],
                                 ],
                               ),
-                              isThreeLine: _userType == 'Drivers',
                             );
                           },
                         );
