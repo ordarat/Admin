@@ -11,10 +11,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final TextEditingController _deliveryFeeController = TextEditingController();
-  final TextEditingController _driverCutController = TextEditingController();
-  final TextEditingController _companyCutController = TextEditingController();
-  bool _isLoading = true;
+  final TextEditingController _whatsappController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -22,42 +20,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadSettings();
   }
 
-  // هێنانی زانیارییەکان لە فایەربەیسەوە لە کاتی کردنەوەی شاشەکە
+  // هێنانی ژمارە کۆنەکە بۆ ناو خانەکە
   Future<void> _loadSettings() async {
-    try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('App_Settings').doc('Financials').get();
-      if (doc.exists) {
-        var data = doc.data() as Map<String, dynamic>;
-        _deliveryFeeController.text = data['default_delivery_fee'].toString();
-        _driverCutController.text = data['default_driver_cut'].toString();
-        _companyCutController.text = data['default_company_cut'].toString();
-      } else {
-        // ئەگەر یەکەم جار بوو، ئەم نرخانە وەک سەرەتا دادەنێت
-        _deliveryFeeController.text = '3000';
-        _driverCutController.text = '2500';
-        _companyCutController.text = '500';
-      }
-    } catch (e) {
-      print(e);
-    } finally {
-      setState(() { _isLoading = false; });
+    var doc = await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').get();
+    if (doc.exists && doc.data() != null) {
+      setState(() {
+        _whatsappController.text = doc.data()!['whatsapp'] ?? '';
+      });
     }
   }
 
-  // خەزنکردنی گۆڕانکارییەکان بۆ ناو فایەربەیس
+  // سەیڤکردنی ژمارە نوێیەکە
   Future<void> _saveSettings() async {
     setState(() { _isLoading = true; });
     try {
-      await FirebaseFirestore.instance.collection('App_Settings').doc('Financials').set({
-        'default_delivery_fee': int.tryParse(_deliveryFeeController.text.trim()) ?? 0,
-        'default_driver_cut': int.tryParse(_driverCutController.text.trim()) ?? 0,
-        'default_company_cut': int.tryParse(_companyCutController.text.trim()) ?? 0,
-        'last_updated': FieldValue.serverTimestamp(),
-      });
+      await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').set({
+        'whatsapp': _whatsappController.text.trim(),
+      }, SetOptions(merge: true));
+      
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رێکخستنەکان بە سەرکەوتوویی نوێکرانەوە'), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ژمارەی واتسئاپ بە سەرکەوتوویی نوێکرایەوە!'), backgroundColor: Colors.green));
     } catch (e) {
-      print(e);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵە: $e'), backgroundColor: Colors.red));
     } finally {
       setState(() { _isLoading = false; });
     }
@@ -65,58 +49,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-
     return Padding(
       padding: const EdgeInsets.all(30.0),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(30.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('رێکخستنە داراییە دینامیکییەکان', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.indigo)),
-              const SizedBox(height: 10),
-              const Text('هەر گۆڕانکارییەک لێرە بکەیت، راستەوخۆ لەسەر مۆبایلی شۆفێر و خوارنگەهەکان جێبەجێ دەبێت.', style: TextStyle(color: Colors.grey)),
-              const Divider(height: 40, thickness: 1),
-              
-              SizedBox(
-                width: 400,
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _deliveryFeeController,
-                      decoration: const InputDecoration(labelText: 'کۆی گشتی کرێی گەیاندن (بۆ کڕیار)', border: OutlineInputBorder(), prefixText: 'IQD '),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _driverCutController,
-                      decoration: const InputDecoration(labelText: 'پشکی شۆفێر لە گەیاندنەکە', border: OutlineInputBorder(), prefixText: 'IQD '),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _companyCutController,
-                      decoration: const InputDecoration(labelText: 'پشکی سافی کۆمپانیا', border: OutlineInputBorder(), prefixText: 'IQD '),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 30),
-                    ElevatedButton.icon(
-                      onPressed: _saveSettings,
-                      icon: const Icon(Icons.save),
-                      label: const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: Text('پاشەکەوتکردنی گۆڕانکارییەکان', style: TextStyle(fontSize: 18)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('رێکخستنەکانی سیستەم', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.indigo)),
+          const SizedBox(height: 20),
+          
+          Card(
+            elevation: 3,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            child: Padding(
+              padding: const EdgeInsets.all(25.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('بەستەری پەیوەندیکردن (واتسئاپ)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  const Text('ئەم ژمارەیە لە شاشەی لۆگینی هەموو شۆفێر و خوارنگەهەکان دەردەکەوێت بۆ ئەوەی راستەوخۆ نامەت بۆ بنێرن. (بۆ نموونە: 9647501234567)', style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 20),
+                  
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _whatsappController,
+                          decoration: InputDecoration(
+                            labelText: 'ژمارەی مۆبایل بە کۆدی وڵاتەوە',
+                            prefixIcon: const Icon(Icons.chat, color: Colors.green),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          keyboardType: TextInputType.phone,
+                        ),
                       ),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50)),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 20),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: _isLoading ? null : _saveSettings,
+                        icon: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.save),
+                        label: const Text('سەیڤکردن', style: TextStyle(fontSize: 18)),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
