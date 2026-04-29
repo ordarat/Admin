@@ -17,7 +17,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
-  // کۆنترۆڵەرەکان بۆ دانانی لینکی وێنەکان بە دەست
   final TextEditingController _profileImageLinkCtrl = TextEditingController();
   final TextEditingController _idCardController = TextEditingController(); 
   final TextEditingController _idCardLinkCtrl = TextEditingController(); 
@@ -82,7 +81,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       }
 
       await FirebaseFirestore.instance.collection(_userType).doc(userCredential.user!.uid).set(userData);
-
       await secondaryApp.delete();
 
       if (!mounted) return;
@@ -130,7 +128,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('ئەرشیڤکردنی بەکارهێنەر', style: TextStyle(color: Colors.orange)),
-        content: Text('ئایا دڵنیایت دەتەوێت ($name) لاببەیت؟ بەم کارە دەچێتە ناو ئەرشیڤ.'),
+        content: Text('ئایا دڵنیایت دەتەوێت ($name) لاببەیت؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
           ElevatedButton(
@@ -156,7 +154,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('سڕینەوەی یەکجاری!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-        content: Text('ئایا دڵنیایت دەتەوێت هەژماری ($name) بە یەکجاری بسڕیتەوە؟ ئەم کارە ناگەڕێتەوە و هەموو داتاکانی دەسڕێنەوە!'),
+        content: Text('ئایا دڵنیایت دەتەوێت هەژماری ($name) بە یەکجاری بسڕیتەوە؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
           ElevatedButton(
@@ -233,7 +231,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                           Text(userData['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
                           Text('مۆبایل: ${userData['phone']} | باڵانس: ${userData['wallet_balance'] ?? 0} IQD', style: const TextStyle(fontSize: 16, color: Colors.grey)),
                           const SizedBox(height: 10),
-                          
                           if (_userType == 'Drivers') ...[
                             Text('ناسنامە: ${userData['id_card'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                             Text('مۆڵەت: ${userData['driving_license'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
@@ -340,7 +337,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     children: [
                       const Text('دروستکردنی هەژماری نوێ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 20),
-                      
                       DropdownButtonFormField<String>(
                         value: _userType,
                         items: const [
@@ -360,11 +356,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       
                       TextField(
                         controller: _profileImageLinkCtrl, 
-                        decoration: const InputDecoration(
-                          labelText: 'لینکی وێنەی پڕۆفایل', 
-                          border: OutlineInputBorder(), 
-                          prefixIcon: Icon(Icons.link, color: Colors.indigo)
-                        )
+                        decoration: const InputDecoration(labelText: 'لینکی وێنەی پڕۆفایل', border: OutlineInputBorder(), prefixIcon: Icon(Icons.link, color: Colors.indigo))
                       ),
                       
                       if (_userType == 'Drivers') ...[
