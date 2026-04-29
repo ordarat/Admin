@@ -28,26 +28,25 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       String fakeEmail = "${_phoneController.text.trim()}@company.com";
       String password = _passwordController.text.trim();
 
-      // بەکارهێنانی رێگەیەکی سەلامەتتر بۆ بانگکردنی ئەپی دووەم بەبێ پچڕانی هێڵ
       FirebaseApp secondaryApp;
       try {
         secondaryApp = Firebase.app('SecondaryApp');
       } catch (e) {
-        secondaryApp = await Firebase.initializeApp(
-          name: 'SecondaryApp',
-          options: Firebase.app().options,
-        );
+        secondaryApp = await Firebase.initializeApp(name: 'SecondaryApp', options: Firebase.app().options);
       }
       
       UserCredential userCredential = await FirebaseAuth.instanceFor(app: secondaryApp)
           .createUserWithEmailAndPassword(email: fakeEmail, password: password);
           
+      // زانیارییە نوێیەکانمان بۆ داتابەیسەکە زیاد کرد
       await FirebaseFirestore.instance.collection(_userType).doc(userCredential.user!.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'password': password, 
         'is_active': true,
-        'wallet_balance': 0,
+        'wallet_balance': 0, // پارەی جزدان
+        'completed_orders': 0, // تەنها بۆ شۆفێر پێویستە بەڵام ئاساییە هەبێت
+        'vehicle_type': 'ماتۆڕسکیل', // دیفاڵت
         'created_at': FieldValue.serverTimestamp(),
       });
 
@@ -61,6 +60,29 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     } finally {
       setState(() { _isLoading = false; });
     }
+  }
+
+  // فەنکشنی پاکتاوکردنی حیسابات (پێدانی پارە و سفرکردنەوەی جزدان)
+  void _clearWalletBalance(String userId, String currentBalance) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('پاکتاوکردنی حیسابات'),
+        content: Text('ئایا دڵنیایت کە بڕی ($currentBalance IQD) دەدەیت بەم کەسە و جزدانەکەی سفر دەکەیتەوە؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('نەخێر')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () {
+              FirebaseFirestore.instance.collection(_userType).doc(userId).update({'wallet_balance': 0});
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باڵانس سفر کرایەوە')));
+            },
+            child: const Text('بەڵێ، پارەکەم پێدا', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -94,12 +116,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     const SizedBox(height: 15),
                     TextField(controller: _phoneController, decoration: const InputDecoration(labelText: 'ژمارەی مۆبایل', border: OutlineInputBorder())),
                     const SizedBox(height: 15),
-                    TextField(controller: _passwordController, decoration: const InputDecoration(labelText: 'وشەی نهێنی (بۆ پێدانی بە کەسەکە)', border: OutlineInputBorder())),
+                    TextField(controller: _passwordController, decoration: const InputDecoration(labelText: 'وشەی نهێنی', border: OutlineInputBorder())),
                     const SizedBox(height: 20),
                     _isLoading 
                       ? const Center(child: CircularProgressIndicator())
                       : ElevatedButton(
                           onPressed: _createUser,
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white),
                           child: const Padding(padding: EdgeInsets.all(12.0), child: Text('تۆمارکردن', style: TextStyle(fontSize: 18))),
                         ),
                   ],
@@ -116,7 +139,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 children: [
                   const Padding(
                     padding: EdgeInsets.all(15.0),
-                    child: Text('لیستی تۆمارکراوەکان', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    child: Text('لیستی تۆمارکراوەکان و حیسابات', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   ),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
@@ -129,15 +152,30 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                           itemCount: users.length,
                           itemBuilder: (context, index) {
                             var userData = users[index].data() as Map<String, dynamic>;
+                            String userId = users[index].id;
+                            
                             return ListTile(
-                              leading: Icon(_userType == 'Drivers' ? Icons.motorcycle : Icons.restaurant),
-                              title: Text(userData['name'] ?? 'بێ ناو'),
-                              subtitle: Text(userData['phone'] ?? ''),
-                              trailing: Switch(
-                                value: userData['is_active'] ?? true,
-                                onChanged: (bool value) {
-                                  FirebaseFirestore.instance.collection(_userType).doc(users[index].id).update({'is_active': value});
-                                },
+                              leading: Icon(_userType == 'Drivers' ? Icons.motorcycle : Icons.restaurant, color: Colors.indigo),
+                              title: Text(userData['name'] ?? 'بێ ناو', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('مۆبایل: ${userData['phone']} | باڵانس: ${userData['wallet_balance'] ?? 0} IQD'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // دوگمەی نوێ بۆ سفرکردنەوەی باڵانس (پێدانی پارە)
+                                  IconButton(
+                                    tooltip: 'پاکتاوکردنی پارە',
+                                    icon: const Icon(Icons.payments, color: Colors.green),
+                                    onPressed: () => _clearWalletBalance(userId, '${userData['wallet_balance'] ?? 0}'),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Switch(
+                                    activeColor: Colors.indigo,
+                                    value: userData['is_active'] ?? true,
+                                    onChanged: (bool value) {
+                                      FirebaseFirestore.instance.collection(_userType).doc(userId).update({'is_active': value});
+                                    },
+                                  ),
+                                ],
                               ),
                             );
                           },
