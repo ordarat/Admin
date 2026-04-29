@@ -4,9 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:typed_data';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -16,59 +13,21 @@ class ManageUsersScreen extends StatefulWidget {
 }
 
 class _ManageUsersScreenState extends State<ManageUsersScreen> {
+  // کۆنترۆڵەرەکان بۆ زانیارییە سەرەکییەکان
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
+  // کۆنترۆڵەرە نوێیەکان بۆ دانانی لینکی وێنەکان
+  final TextEditingController _profileImageLinkCtrl = TextEditingController();
+  final TextEditingController _idCardController = TextEditingController(); // بۆ ژمارەی ناسنامە
+  final TextEditingController _idCardLinkCtrl = TextEditingController(); // بۆ لینکی وێنەی ناسنامە
+  final TextEditingController _drivingLicenseController = TextEditingController(); // بۆ ژمارەی مۆڵەت
+  final TextEditingController _licenseLinkCtrl = TextEditingController(); // بۆ لینکی وێنەی مۆڵەت
+  
   String _userType = 'Drivers'; 
   bool _isLoading = false;
   bool _showArchived = false; 
-  
-  // گۆڕاوەکان بۆ هەرسێ وێنەکە
-  Uint8List? _profileImageBytes;
-  String? _profileImageName;
-
-  Uint8List? _idCardBytes;
-  String? _idCardName;
-
-  Uint8List? _licenseBytes;
-  String? _licenseName;
-
-  // فەنکشنێکی گشتی بۆ هەڵبژاردنی هەر جۆرە وێنەیەک
-  Future<void> _pickImage(String imageType) async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    
-    if (image != null) {
-      final bytes = await image.readAsBytes();
-      setState(() {
-        if (imageType == 'profile') {
-          _profileImageBytes = bytes;
-          _profileImageName = image.name;
-        } else if (imageType == 'id_card') {
-          _idCardBytes = bytes;
-          _idCardName = image.name;
-        } else if (imageType == 'license') {
-          _licenseBytes = bytes;
-          _licenseName = image.name;
-        }
-      });
-    }
-  }
-
-  // فەنکشنی ئەپڵۆدکردنی وێنە بە خێرایی و رێگریکردن لە خولانەوەی بێ کۆتا
-  Future<String> _uploadImage(Uint8List bytes, String fileName, String folderPath) async {
-    String uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
-    Reference storageRef = FirebaseStorage.instance.ref().child('$folderPath/$uniqueFileName');
-    
-    // دانانی مەرجی 15 چرکە بۆ ئەپڵۆدکردن
-    UploadTask uploadTask = storageRef.putData(bytes);
-    TaskSnapshot snapshot = await uploadTask.timeout(const Duration(seconds: 15), onTimeout: () {
-      throw Exception("کێشە لە ئینتەرنێت هەیە، وێنەکە ئەپڵۆد نەبوو.");
-    });
-    
-    return await snapshot.ref.getDownloadURL();
-  }
 
   Future<void> _createUser() async {
     if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -76,8 +35,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       return;
     }
 
-    if (_userType == 'Drivers' && (_idCardBytes == null || _licenseBytes == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تکایە وێنەی ناسنامە و مۆڵەت هەڵبژێرە!'), backgroundColor: Colors.red));
+    if (_userType == 'Drivers' && (_idCardController.text.isEmpty || _drivingLicenseController.text.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تکایە ژمارەی ناسنامە و مۆڵەت پڕبکەرەوە!'), backgroundColor: Colors.red));
       return;
     }
 
@@ -87,18 +46,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       String fakeEmail = "${_phoneController.text.trim()}@company.com";
       String password = _passwordController.text.trim();
       
-      String profileImageUrl = ''; 
-      String idCardUrl = '';
-      String licenseUrl = '';
-
-      // ئەپڵۆدکردنی وێنەکان ئەگەر هەبن
-      if (_profileImageBytes != null) {
-        profileImageUrl = await _uploadImage(_profileImageBytes!, _profileImageName!, 'ProfileImages');
-      }
-      if (_userType == 'Drivers') {
-        idCardUrl = await _uploadImage(_idCardBytes!, _idCardName!, 'LegalDocuments');
-        licenseUrl = await _uploadImage(_licenseBytes!, _licenseName!, 'LegalDocuments');
-      }
+      // وەرگرتنی لینکەکان لە خانەکانەوە
+      String profileImageUrl = _profileImageLinkCtrl.text.trim();
+      String idCardUrl = _idCardLinkCtrl.text.trim();
+      String licenseUrl = _licenseLinkCtrl.text.trim();
 
       FirebaseApp secondaryApp;
       try {
@@ -117,7 +68,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'is_active': true,
         'is_archived': false, 
         'wallet_balance': 0, 
-        'profile_image': profileImageUrl, 
+        'profile_image': profileImageUrl, // لینکی وێنەی پڕۆفایل
         'created_at': FieldValue.serverTimestamp(),
       };
 
@@ -125,8 +76,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         userData.addAll({
           'completed_orders': 0, 
           'vehicle_type': 'ماتۆڕسکیل', 
-          'id_card_url': idCardUrl, // سەیڤکردنی لینکی وێنەی ناسنامە
-          'driving_license_url': licenseUrl, // سەیڤکردنی لینکی وێنەی مۆڵەت
+          'id_card': _idCardController.text.trim(),
+          'driving_license': _drivingLicenseController.text.trim(),
+          'id_card_url': idCardUrl, // لینکی وێنەی ناسنامە
+          'driving_license_url': licenseUrl, // لینکی وێنەی مۆڵەت
         });
       }
 
@@ -135,15 +88,15 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی تۆمار کرا!'), backgroundColor: Colors.green));
       
-      // پاککردنەوەی هەموو شتەکان
+      // پاککردنەوەی هەموو خانەکان
       _nameController.clear();
       _phoneController.clear();
       _passwordController.clear();
-      setState(() {
-        _profileImageBytes = null;
-        _idCardBytes = null;
-        _licenseBytes = null;
-      });
+      _profileImageLinkCtrl.clear();
+      _idCardController.clear();
+      _idCardLinkCtrl.clear();
+      _drivingLicenseController.clear();
+      _licenseLinkCtrl.clear();
       
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵە: $e'), backgroundColor: Colors.red));
@@ -199,7 +152,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەژماری ($name) گەڕێندرایەوە!'), backgroundColor: Colors.green));
   }
 
-  // فەنکشنی نوێ بۆ سڕینەوەی یەکجاری
   void _hardDeleteUser(String userId, String name) {
     showDialog(
       context: context,
@@ -218,6 +170,25 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             child: const Text('بەڵێ، بیسڕەوە', style: TextStyle(color: Colors.white)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Image.network(imageUrl, fit: BoxFit.contain),
+            ),
+            IconButton(icon: const Icon(Icons.cancel, color: Colors.red, size: 40), onPressed: () => Navigator.pop(context)),
+          ],
+        ),
       ),
     );
   }
@@ -241,11 +212,19 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.indigo[100],
-                      backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
-                      child: (imageUrl == null || imageUrl.isEmpty) ? Icon(_userType == 'Drivers' ? Icons.motorcycle : Icons.restaurant, size: 50, color: Colors.indigo) : null,
+                    GestureDetector(
+                      onTap: () => (imageUrl != null && imageUrl.isNotEmpty) ? _showFullImage(context, imageUrl) : null,
+                      child: Container(
+                        width: 100, height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.indigo, width: 3),
+                          image: (imageUrl != null && imageUrl.isNotEmpty)
+                              ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
+                              : null,
+                        ),
+                        child: (imageUrl == null || imageUrl.isEmpty) ? Icon(_userType == 'Drivers' ? Icons.motorcycle : Icons.restaurant, size: 50, color: Colors.indigo) : null,
+                      ),
                     ),
                     const SizedBox(width: 20),
                     Expanded(
@@ -257,13 +236,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                           const SizedBox(height: 10),
                           
                           if (_userType == 'Drivers') ...[
+                            Text('ناسنامە: ${userData['id_card'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                            Text('مۆڵەت: ${userData['driving_license'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                             Text('کۆی گەیاندنەکان: ${userData['completed_orders'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                             const SizedBox(height: 10),
-                            const Text('زانیارییە یاساییەکان:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text('وێنە یاساییەکان:', style: TextStyle(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 5),
                             Row(
                               children: [
-                                // پیشاندانی وێنەی ناسنامە
                                 if (userData['id_card_url'] != null && userData['id_card_url'].toString().isNotEmpty)
                                   GestureDetector(
                                     onTap: () => _showFullImage(context, userData['id_card_url']),
@@ -274,7 +254,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                       child: Image.network(userData['id_card_url'], fit: BoxFit.cover),
                                     ),
                                   ),
-                                // پیشاندانی وێنەی مۆڵەت
                                 if (userData['driving_license_url'] != null && userData['driving_license_url'].toString().isNotEmpty)
                                   GestureDetector(
                                     onTap: () => _showFullImage(context, userData['driving_license_url']),
@@ -344,35 +323,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // پیشاندانی وێنەکە بە گەورەیی کاتێک کلیکی لێ دەکەیت
-  void _showFullImage(BuildContext context, String imageUrl) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: Stack(
-          alignment: Alignment.topRight,
-          children: [
-            Image.network(imageUrl),
-            IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 30), onPressed: () => Navigator.pop(context)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // دیزاینێکی جوان بۆ هەڵبژاردنی وێنەکانی ناسنامە و مۆڵەت
-  Widget _buildImagePickerTile(String title, Uint8List? imageBytes, String type) {
-    return ListTile(
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      trailing: imageBytes != null 
-          ? Image.memory(imageBytes, width: 60, height: 40, fit: BoxFit.cover)
-          : const Icon(Icons.upload_file, color: Colors.indigo, size: 30),
-      onTap: () => _pickImage(type),
-      tileColor: Colors.indigo[50],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -391,26 +341,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     children: [
                       const Text('دروستکردنی هەژماری نوێ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 20),
-                      GestureDetector(
-                        onTap: () => _pickImage('profile'),
-                        child: Stack(
-                          alignment: Alignment.bottomRight,
-                          children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: Colors.grey[200],
-                              backgroundImage: _profileImageBytes != null ? MemoryImage(_profileImageBytes!) : null,
-                              child: _profileImageBytes == null ? const Icon(Icons.person, size: 50, color: Colors.grey) : null,
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: const BoxDecoration(color: Colors.indigo, shape: BoxShape.circle),
-                              child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+                      
                       DropdownButtonFormField<String>(
                         value: _userType,
                         items: const [
@@ -426,14 +357,29 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       TextField(controller: _phoneController, decoration: const InputDecoration(labelText: 'ژمارەی مۆبایل', border: OutlineInputBorder())),
                       const SizedBox(height: 15),
                       TextField(controller: _passwordController, decoration: const InputDecoration(labelText: 'وشەی نهێنی', border: OutlineInputBorder())),
+                      const SizedBox(height: 15),
+                      
+                      // خانەی دانانی لینکی وێنەی پڕۆفایل
+                      TextField(
+                        controller: _profileImageLinkCtrl, 
+                        decoration: const InputDecoration(
+                          labelText: 'لینکی وێنەی پڕۆفایل (ئارەزوومەندانە)', 
+                          border: OutlineInputBorder(), 
+                          prefixIcon: Icon(Icons.link, color: Colors.indigo)
+                        )
+                      ),
                       
                       if (_userType == 'Drivers') ...[
                         const Divider(height: 30, thickness: 1),
-                        const Text('زانیارییە یاساییەکان (تەنها وێنە)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                        const Text('زانیارییە یاساییەکان', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                         const SizedBox(height: 10),
-                        _buildImagePickerTile('وێنەی ناسنامە / کارتی نیشتیمانی', _idCardBytes, 'id_card'),
+                        TextField(controller: _idCardController, decoration: const InputDecoration(labelText: 'ژمارەی ناسنامە', border: OutlineInputBorder(), prefixIcon: Icon(Icons.badge))),
                         const SizedBox(height: 10),
-                        _buildImagePickerTile('وێنەی مۆڵەتی شۆفێری', _licenseBytes, 'license'),
+                        TextField(controller: _idCardLinkCtrl, decoration: const InputDecoration(labelText: 'لینکی وێنەی ناسنامە', border: OutlineInputBorder(), prefixIcon: Icon(Icons.link))),
+                        const SizedBox(height: 15),
+                        TextField(controller: _drivingLicenseController, decoration: const InputDecoration(labelText: 'ژمارەی مۆڵەت', border: OutlineInputBorder(), prefixIcon: Icon(Icons.drive_eta))),
+                        const SizedBox(height: 10),
+                        TextField(controller: _licenseLinkCtrl, decoration: const InputDecoration(labelText: 'لینکی وێنەی مۆڵەت', border: OutlineInputBorder(), prefixIcon: Icon(Icons.link))),
                       ],
                       const SizedBox(height: 20),
                       _isLoading 
@@ -496,13 +442,22 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                             
                             return ListTile(
                               onTap: () => _showUserProfileReport(userId, userData),
-                              leading: CircleAvatar(
-                                radius: 25,
-                                backgroundColor: _showArchived ? Colors.grey[300] : Colors.indigo[100],
-                                backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
-                                child: (imageUrl == null || imageUrl.isEmpty) 
-                                    ? Icon(_userType == 'Drivers' ? Icons.motorcycle : Icons.restaurant, color: _showArchived ? Colors.grey : Colors.indigo) 
-                                    : null,
+                              leading: GestureDetector(
+                                onTap: () => (imageUrl != null && imageUrl.isNotEmpty) ? _showFullImage(context, imageUrl) : null,
+                                child: Container(
+                                  width: 55, height: 55,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: _showArchived ? Colors.grey[300] : Colors.indigo[50],
+                                    border: Border.all(color: Colors.indigo, width: 1.5),
+                                    image: (imageUrl != null && imageUrl.isNotEmpty)
+                                        ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
+                                        : null,
+                                  ),
+                                  child: (imageUrl == null || imageUrl.isEmpty) 
+                                      ? Icon(_userType == 'Drivers' ? Icons.motorcycle : Icons.restaurant, color: _showArchived ? Colors.grey : Colors.indigo, size: 30) 
+                                      : null,
+                                ),
                               ),
                               title: Text(userName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _showArchived ? Colors.grey : Colors.black)),
                               subtitle: Text('مۆبایل: ${userData['phone']} | باڵانس: ${userData['wallet_balance'] ?? 0} IQD', style: const TextStyle(color: Colors.blueGrey)),
@@ -517,7 +472,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                       label: const Text('گەڕاندنەوە'),
                                     ),
                                     const SizedBox(width: 10),
-                                    // دوگمەی نوێ بۆ سڕینەوەی یەکجاری
                                     IconButton(
                                       tooltip: 'سڕینەوەی یەکجاری',
                                       icon: const Icon(Icons.delete_forever, color: Colors.red),
