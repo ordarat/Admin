@@ -19,34 +19,65 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _idCardController = TextEditingController();
-  final TextEditingController _drivingLicenseController = TextEditingController();
   
   String _userType = 'Drivers'; 
   bool _isLoading = false;
   bool _showArchived = false; 
   
-  Uint8List? _selectedImageBytes;
-  String? _selectedImageName;
+  // گۆڕاوەکان بۆ هەرسێ وێنەکە
+  Uint8List? _profileImageBytes;
+  String? _profileImageName;
 
-  Future<void> _pickImage() async {
+  Uint8List? _idCardBytes;
+  String? _idCardName;
+
+  Uint8List? _licenseBytes;
+  String? _licenseName;
+
+  // فەنکشنێکی گشتی بۆ هەڵبژاردنی هەر جۆرە وێنەیەک
+  Future<void> _pickImage(String imageType) async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     
     if (image != null) {
       final bytes = await image.readAsBytes();
       setState(() {
-        _selectedImageBytes = bytes;
-        _selectedImageName = image.name;
+        if (imageType == 'profile') {
+          _profileImageBytes = bytes;
+          _profileImageName = image.name;
+        } else if (imageType == 'id_card') {
+          _idCardBytes = bytes;
+          _idCardName = image.name;
+        } else if (imageType == 'license') {
+          _licenseBytes = bytes;
+          _licenseName = image.name;
+        }
       });
     }
   }
 
-  Future<void> _createUser() async {
-    if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _passwordController.text.isEmpty) return;
+  // فەنکشنی ئەپڵۆدکردنی وێنە بە خێرایی و رێگریکردن لە خولانەوەی بێ کۆتا
+  Future<String> _uploadImage(Uint8List bytes, String fileName, String folderPath) async {
+    String uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+    Reference storageRef = FirebaseStorage.instance.ref().child('$folderPath/$uniqueFileName');
+    
+    // دانانی مەرجی 15 چرکە بۆ ئەپڵۆدکردن
+    UploadTask uploadTask = storageRef.putData(bytes);
+    TaskSnapshot snapshot = await uploadTask.timeout(const Duration(seconds: 15), onTimeout: () {
+      throw Exception("کێشە لە ئینتەرنێت هەیە، وێنەکە ئەپڵۆد نەبوو.");
+    });
+    
+    return await snapshot.ref.getDownloadURL();
+  }
 
-    if (_userType == 'Drivers' && (_idCardController.text.isEmpty || _drivingLicenseController.text.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تکایە ژمارەی ناسنامە و مۆڵەت پڕبکەرەوە!'), backgroundColor: Colors.red));
+  Future<void> _createUser() async {
+    if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تکایە خانە سەرەکییەکان پڕبکەرەوە!'), backgroundColor: Colors.red));
+      return;
+    }
+
+    if (_userType == 'Drivers' && (_idCardBytes == null || _licenseBytes == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تکایە وێنەی ناسنامە و مۆڵەت هەڵبژێرە!'), backgroundColor: Colors.red));
       return;
     }
 
@@ -55,14 +86,18 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     try {
       String fakeEmail = "${_phoneController.text.trim()}@company.com";
       String password = _passwordController.text.trim();
+      
       String profileImageUrl = ''; 
+      String idCardUrl = '';
+      String licenseUrl = '';
 
-      if (_selectedImageBytes != null) {
-        String fileName = '${DateTime.now().millisecondsSinceEpoch}_$_selectedImageName';
-        Reference storageRef = FirebaseStorage.instance.ref().child('ProfileImages/$fileName');
-        UploadTask uploadTask = storageRef.putData(_selectedImageBytes!);
-        TaskSnapshot snapshot = await uploadTask;
-        profileImageUrl = await snapshot.ref.getDownloadURL(); 
+      // ئەپڵۆدکردنی وێنەکان ئەگەر هەبن
+      if (_profileImageBytes != null) {
+        profileImageUrl = await _uploadImage(_profileImageBytes!, _profileImageName!, 'ProfileImages');
+      }
+      if (_userType == 'Drivers') {
+        idCardUrl = await _uploadImage(_idCardBytes!, _idCardName!, 'LegalDocuments');
+        licenseUrl = await _uploadImage(_licenseBytes!, _licenseName!, 'LegalDocuments');
       }
 
       FirebaseApp secondaryApp;
@@ -90,24 +125,25 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         userData.addAll({
           'completed_orders': 0, 
           'vehicle_type': 'ماتۆڕسکیل', 
-          'id_card': _idCardController.text.trim(), 
-          'driving_license': _drivingLicenseController.text.trim(), 
+          'id_card_url': idCardUrl, // سەیڤکردنی لینکی وێنەی ناسنامە
+          'driving_license_url': licenseUrl, // سەیڤکردنی لینکی وێنەی مۆڵەت
         });
       }
 
       await FirebaseFirestore.instance.collection(_userType).doc(userCredential.user!.uid).set(userData);
 
-      await secondaryApp.delete();
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی تۆمار کرا!'), backgroundColor: Colors.green));
       
+      // پاککردنەوەی هەموو شتەکان
       _nameController.clear();
       _phoneController.clear();
       _passwordController.clear();
-      _idCardController.clear();
-      _drivingLicenseController.clear();
-      setState(() { _selectedImageBytes = null; }); 
+      setState(() {
+        _profileImageBytes = null;
+        _idCardBytes = null;
+        _licenseBytes = null;
+      });
       
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵە: $e'), backgroundColor: Colors.red));
@@ -141,12 +177,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('ئەرشیڤکردنی بەکارهێنەر', style: TextStyle(color: Colors.red)),
-        content: Text('ئایا دڵنیایت دەتەوێت ($name) لاببەیت؟'),
+        title: const Text('ئەرشیڤکردنی بەکارهێنەر', style: TextStyle(color: Colors.orange)),
+        content: Text('ئایا دڵنیایت دەتەوێت ($name) لاببەیت؟ بەم کارە دەچێتە ناو ئەرشیڤ.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () {
               FirebaseFirestore.instance.collection(_userType).doc(userId).update({'is_archived': true, 'is_active': false});
               Navigator.pop(context);
@@ -161,6 +197,29 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   void _restoreUser(String userId, String name) {
     FirebaseFirestore.instance.collection(_userType).doc(userId).update({'is_archived': false, 'is_active': true});
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەژماری ($name) گەڕێندرایەوە!'), backgroundColor: Colors.green));
+  }
+
+  // فەنکشنی نوێ بۆ سڕینەوەی یەکجاری
+  void _hardDeleteUser(String userId, String name) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('سڕینەوەی یەکجاری!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        content: Text('ئایا دڵنیایت دەتەوێت هەژماری ($name) بە یەکجاری بسڕیتەوە؟ ئەم کارە ناگەڕێتەوە و هەموو داتاکانی دەسڕێنەوە!'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              FirebaseFirestore.instance.collection(_userType).doc(userId).delete();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە یەکجاری سڕایەوە!'), backgroundColor: Colors.red));
+            },
+            child: const Text('بەڵێ، بیسڕەوە', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showUserProfileReport(String userId, Map<String, dynamic> userData) {
@@ -196,10 +255,37 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                           Text(userData['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
                           Text('مۆبایل: ${userData['phone']} | باڵانس: ${userData['wallet_balance'] ?? 0} IQD', style: const TextStyle(fontSize: 16, color: Colors.grey)),
                           const SizedBox(height: 10),
+                          
                           if (_userType == 'Drivers') ...[
-                            Text('ناسنامە: ${userData['id_card'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
-                            Text('مۆڵەت: ${userData['driving_license'] ?? 'نییە'}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                             Text('کۆی گەیاندنەکان: ${userData['completed_orders'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                            const SizedBox(height: 10),
+                            const Text('زانیارییە یاساییەکان:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                // پیشاندانی وێنەی ناسنامە
+                                if (userData['id_card_url'] != null && userData['id_card_url'].toString().isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () => _showFullImage(context, userData['id_card_url']),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(left: 10),
+                                      width: 100, height: 60,
+                                      decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(5)),
+                                      child: Image.network(userData['id_card_url'], fit: BoxFit.cover),
+                                    ),
+                                  ),
+                                // پیشاندانی وێنەی مۆڵەت
+                                if (userData['driving_license_url'] != null && userData['driving_license_url'].toString().isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () => _showFullImage(context, userData['driving_license_url']),
+                                    child: Container(
+                                      width: 100, height: 60,
+                                      decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(5)),
+                                      child: Image.network(userData['driving_license_url'], fit: BoxFit.cover),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ]
                         ],
                       ),
@@ -215,7 +301,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     stream: FirebaseFirestore.instance.collection('Orders').where(fieldToQuery, isEqualTo: userId).snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text('هیچ ئۆردەرێکی تۆمارکراو نییە بۆ ئەم کەسە.', style: TextStyle(color: Colors.grey, fontSize: 16)));
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text('هیچ ئۆردەرێکی تۆمارکراو نییە.', style: TextStyle(color: Colors.grey, fontSize: 16)));
 
                       var userOrders = snapshot.data!.docs.toList();
                       userOrders.sort((a, b) {
@@ -258,6 +344,35 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
+  // پیشاندانی وێنەکە بە گەورەیی کاتێک کلیکی لێ دەکەیت
+  void _showFullImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            Image.network(imageUrl),
+            IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 30), onPressed: () => Navigator.pop(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // دیزاینێکی جوان بۆ هەڵبژاردنی وێنەکانی ناسنامە و مۆڵەت
+  Widget _buildImagePickerTile(String title, Uint8List? imageBytes, String type) {
+    return ListTile(
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      trailing: imageBytes != null 
+          ? Image.memory(imageBytes, width: 60, height: 40, fit: BoxFit.cover)
+          : const Icon(Icons.upload_file, color: Colors.indigo, size: 30),
+      onTap: () => _pickImage(type),
+      tileColor: Colors.indigo[50],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -277,15 +392,15 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       const Text('دروستکردنی هەژماری نوێ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 20),
                       GestureDetector(
-                        onTap: _pickImage,
+                        onTap: () => _pickImage('profile'),
                         child: Stack(
                           alignment: Alignment.bottomRight,
                           children: [
                             CircleAvatar(
                               radius: 50,
                               backgroundColor: Colors.grey[200],
-                              backgroundImage: _selectedImageBytes != null ? MemoryImage(_selectedImageBytes!) : null,
-                              child: _selectedImageBytes == null ? const Icon(Icons.person, size: 50, color: Colors.grey) : null,
+                              backgroundImage: _profileImageBytes != null ? MemoryImage(_profileImageBytes!) : null,
+                              child: _profileImageBytes == null ? const Icon(Icons.person, size: 50, color: Colors.grey) : null,
                             ),
                             Container(
                               padding: const EdgeInsets.all(5),
@@ -314,11 +429,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       
                       if (_userType == 'Drivers') ...[
                         const Divider(height: 30, thickness: 1),
-                        const Text('زانیارییە یاساییەکان', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                        const Text('زانیارییە یاساییەکان (تەنها وێنە)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                         const SizedBox(height: 10),
-                        TextField(controller: _idCardController, decoration: const InputDecoration(labelText: 'ناسنامە / کارتی نیشتیمانی', border: OutlineInputBorder(), prefixIcon: Icon(Icons.badge))),
+                        _buildImagePickerTile('وێنەی ناسنامە / کارتی نیشتیمانی', _idCardBytes, 'id_card'),
                         const SizedBox(height: 10),
-                        TextField(controller: _drivingLicenseController, decoration: const InputDecoration(labelText: 'مۆڵەتی شۆفێری', border: OutlineInputBorder(), prefixIcon: Icon(Icons.drive_eta))),
+                        _buildImagePickerTile('وێنەی مۆڵەتی شۆفێری', _licenseBytes, 'license'),
                       ],
                       const SizedBox(height: 20),
                       _isLoading 
@@ -390,18 +505,25 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                     : null,
                               ),
                               title: Text(userName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _showArchived ? Colors.grey : Colors.black)),
-                              subtitle: Text('مۆبایل: ${userData['phone']} | کلیک بکە بۆ بینینی راپۆرت', style: const TextStyle(color: Colors.blue)),
+                              subtitle: Text('مۆبایل: ${userData['phone']} | باڵانس: ${userData['wallet_balance'] ?? 0} IQD', style: const TextStyle(color: Colors.blueGrey)),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (_showArchived)
+                                  if (_showArchived) ...[
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                                       onPressed: () => _restoreUser(userId, userName),
                                       icon: const Icon(Icons.restore),
                                       label: const Text('گەڕاندنەوە'),
-                                    )
-                                  else ...[
+                                    ),
+                                    const SizedBox(width: 10),
+                                    // دوگمەی نوێ بۆ سڕینەوەی یەکجاری
+                                    IconButton(
+                                      tooltip: 'سڕینەوەی یەکجاری',
+                                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                      onPressed: () => _hardDeleteUser(userId, userName),
+                                    ),
+                                  ] else ...[
                                     IconButton(
                                       tooltip: 'پاکتاوکردنی پارە',
                                       icon: const Icon(Icons.payments, color: Colors.green),
@@ -414,7 +536,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                     ),
                                     IconButton(
                                       tooltip: 'ئەرشیڤکردن',
-                                      icon: const Icon(Icons.archive, color: Colors.red),
+                                      icon: const Icon(Icons.archive, color: Colors.orange),
                                       onPressed: () => _archiveUser(userId, userName),
                                     ),
                                   ],
