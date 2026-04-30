@@ -2,8 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'dashboard_overview.dart';
-// تێبینی: ئەو فایلانەی خوارەوە دواتر یەک یەک دروستیان دەکەینەوە بە دیزاینی پرۆفێشناڵ
-// import 'manage_users.dart';
+import 'manage_users.dart'; // لێرەدا فایلەکەم بۆ چالاک کردوویت
 // import 'live_tracking.dart';
 // import 'settings_screen.dart';
 
@@ -20,7 +19,7 @@ class _MainLayoutState extends State<MainLayout> {
   // لیستی ئەو شاشانەی کە لە بەشی راست دەردەکەون
   final List<Widget> _screens = [
     const DashboardOverview(),
-    const Center(child: Text('شاشەی بەڕێوەبردنی بەکارهێنەران (دواتر دروست دەکرێت)', style: TextStyle(fontSize: 24))),
+    const ManageUsersScreen(), // لێرەدا شاشەکەیم بۆ داناویت
     const Center(child: Text('شاشەی نەخشەی راستەوخۆ (دواتر دروست دەکرێت)', style: TextStyle(fontSize: 24))),
     const Center(child: Text('شاشەی رێکخستنەکان (دواتر دروست دەکرێت)', style: TextStyle(fontSize: 24))),
   ];
