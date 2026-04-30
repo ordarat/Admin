@@ -8,6 +8,7 @@ class DashboardOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // پشکنینی قەبارەی شاشەکە
     bool isMobile = MediaQuery.of(context).size.width < 800;
 
     return SingleChildScrollView(
@@ -20,43 +21,29 @@ class DashboardOverview extends StatelessWidget {
           Text('بەخێربێیت بۆ ژووری کۆنترۆڵی ئۆردەرات.', style: TextStyle(color: Colors.grey, fontSize: isMobile ? 14 : 16)),
           const SizedBox(height: 40),
           
-          // سیستەمی زیرەک: ئەگەر مۆبایلە بیانخە ژێر یەکتر، ئەگەر لاپتۆپە تەنیشت یەکتر
-          isMobile 
-            ? Column(
-                children: [
-                  _buildStatCard('کۆی شۆفێرەکان', 'Drivers', Icons.motorcycle, Colors.blue),
-                  const SizedBox(height: 15),
-                  _buildStatCard('کۆی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange),
-                  const SizedBox(height: 15),
-                  _buildStatCard('ئۆردەرە چالاکەکان', 'Orders', Icons.shopping_bag, Colors.green, isOrders: true),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(child: _buildStatCard('کۆی شۆفێرەکان', 'Drivers', Icons.motorcycle, Colors.blue)),
-                  const SizedBox(width: 20),
-                  Expanded(child: _buildStatCard('کۆی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange)),
-                  const SizedBox(width: 20),
-                  Expanded(child: _buildStatCard('ئۆردەرە چالاکەکان', 'Orders', Icons.shopping_bag, Colors.green, isOrders: true)),
-                ],
-              ),
+          // بەکارهێنانی Wrap لەبری Row بۆ ئەوەی لە شاشەی بچووکدا نەبێتە هۆی کراش
+          Wrap(
+            spacing: 20,
+            runSpacing: 20,
+            children: [
+              SizedBox(width: isMobile ? double.infinity : 300, child: _buildStatCard('کۆی شۆفێرەکان', 'Drivers', Icons.motorcycle, Colors.blue)),
+              SizedBox(width: isMobile ? double.infinity : 300, child: _buildStatCard('کۆی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange)),
+              SizedBox(width: isMobile ? double.infinity : 300, child: _buildStatCard('ئۆردەرە چالاکەکان', 'Orders', Icons.shopping_bag, Colors.green, isOrders: true)),
+            ],
+          ),
           
           const SizedBox(height: 40),
           
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
-            ),
+            padding: EdgeInsets.all(isMobile ? 20 : 30),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(Icons.auto_graph, size: 80, color: Colors.indigo[100]),
+                Icon(Icons.auto_graph, size: isMobile ? 60 : 80, color: Colors.indigo[100]),
                 const SizedBox(height: 20),
-                const Text('سیستەمی ئۆردەرات لە گەشەکردندایە', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo)),
+                Text('سیستەمی ئۆردەرات لە گەشەکردندایە', textAlign: TextAlign.center, style: TextStyle(fontSize: isMobile ? 16 : 20, fontWeight: FontWeight.bold, color: Colors.indigo)),
               ],
             ),
           )
@@ -75,30 +62,25 @@ class DashboardOverview extends StatelessWidget {
         if (snapshot.hasData) count = snapshot.data!.docs.length;
 
         return Container(
-          padding: const EdgeInsets.all(25),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))],
-            border: Border(bottom: BorderSide(color: color, width: 4)),
-          ),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))], border: Border(bottom: BorderSide(color: color, width: 4))),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(icon, size: 40, color: color),
-              ),
-              const SizedBox(width: 20),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  snapshot.connectionState == ConnectionState.waiting
-                      ? const CircularProgressIndicator()
-                      : Text('$count', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-                ],
+              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, size: 30, color: color)),
+              const SizedBox(width: 15),
+              // ئەگەر نووسینەکە درێژ بوو، Expanded ناهێڵێت شاشەکە رەساسی ببێت
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 5),
+                    snapshot.connectionState == ConnectionState.waiting
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text('$count', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
             ],
           ),
