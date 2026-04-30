@@ -20,7 +20,7 @@ class AdminApp extends StatefulWidget {
 
 class _AdminAppState extends State<AdminApp> {
   bool _isInit = false;
-  bool _isError = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -28,22 +28,45 @@ class _AdminAppState extends State<AdminApp> {
     _initializeFirebaseSafe();
   }
 
-  // ئەمە نهێنییەکەیە بۆ ئەوەی قەت شاشەی رەساسی نەدات
   Future<void> _initializeFirebaseSafe() async {
     try {
-      await Firebase.initializeApp();
+      // پشکنین دەکات بزانێت پێشتر کارا بووە یان نا
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
       if (mounted) setState(() => _isInit = true);
     } catch (e) {
-      if (mounted) setState(() => _isError = true);
+      // لێرەدا ئێرۆرە راستەقینەکە دەگرین بۆ ئەوەی بیخەینە سەر شاشەکە
+      if (mounted) setState(() => _errorMessage = e.toString());
       debugPrint('Firebase Error: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ئەگەر کێشەی فایەربەیس هەبوو
-    if (_isError) {
-      return const MaterialApp(home: Scaffold(body: Center(child: Text('کێشە لە پەیوەندی بە داتابەیسەوە هەیە', style: TextStyle(color: Colors.red, fontSize: 20)))));
+    // ئەگەر کێشەی فایەربەیس هەبوو، ئێرۆرەکەمان بە ئینگلیزی بۆ پیشان دەدات
+    if (_errorMessage.isNotEmpty) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 60),
+                  const SizedBox(height: 20),
+                  const Text('کێشە لە پەیوەندی بە داتابەیسەوە هەیە', style: TextStyle(color: Colors.red, fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 15),
+                  // ئەمە ئەو بەشە گرنگەیە کە پێمان دەڵێت کێشەکە چییە
+                  Text(_errorMessage, style: const TextStyle(color: Colors.grey, fontSize: 14), textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     // ئەگەر خەریکی لۆدینگە
@@ -57,7 +80,7 @@ class _AdminAppState extends State<AdminApp> {
       );
     }
 
-    // کاتێک هەموو شتێک ئامادەیە
+    // کاتێک هەموو شتێک ئامادەیە، بزانە لۆگین بووە یان نا
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Orderat Admin Control',
@@ -66,7 +89,6 @@ class _AdminAppState extends State<AdminApp> {
         scaffoldBackgroundColor: const Color(0xFFF4F7FC),
         fontFamily: 'Roboto',
       ),
-      // پشکنەری زیرەک: ئەگەر لۆگین بووە بیبە ژوورەوە، ئەگەرنا بۆ شاشەی لۆگین
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
