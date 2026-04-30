@@ -8,30 +8,41 @@ class DashboardOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    bool isMobile = MediaQuery.of(context).size.width < 800;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(30.0),
+      padding: EdgeInsets.all(isMobile ? 15.0 : 30.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('پوختەی ئامارەکان', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+          Text('پوختەی ئامارەکان', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
           const SizedBox(height: 10),
-          const Text('بەخێربێیت بۆ ژووری کۆنترۆڵی ئۆردەرات. لێرەوە چاودێری تەواوی سیستەمەکە بکە.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+          Text('بەخێربێیت بۆ ژووری کۆنترۆڵی ئۆردەرات.', style: TextStyle(color: Colors.grey, fontSize: isMobile ? 14 : 16)),
           const SizedBox(height: 40),
           
-          // کارتەکانی ئامار
-          Row(
-            children: [
-              Expanded(child: _buildStatCard('کۆی شۆفێرەکان', 'Drivers', Icons.motorcycle, Colors.blue)),
-              const SizedBox(width: 20),
-              Expanded(child: _buildStatCard('کۆی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange)),
-              const SizedBox(width: 20),
-              Expanded(child: _buildStatCard('ئۆردەرە چالاکەکان', 'Orders', Icons.shopping_bag, Colors.green, isOrders: true)),
-            ],
-          ),
+          // سیستەمی زیرەک: ئەگەر مۆبایلە بیانخە ژێر یەکتر، ئەگەر لاپتۆپە تەنیشت یەکتر
+          isMobile 
+            ? Column(
+                children: [
+                  _buildStatCard('کۆی شۆفێرەکان', 'Drivers', Icons.motorcycle, Colors.blue),
+                  const SizedBox(height: 15),
+                  _buildStatCard('کۆی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange),
+                  const SizedBox(height: 15),
+                  _buildStatCard('ئۆردەرە چالاکەکان', 'Orders', Icons.shopping_bag, Colors.green, isOrders: true),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: _buildStatCard('کۆی شۆفێرەکان', 'Drivers', Icons.motorcycle, Colors.blue)),
+                  const SizedBox(width: 20),
+                  Expanded(child: _buildStatCard('کۆی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange)),
+                  const SizedBox(width: 20),
+                  Expanded(child: _buildStatCard('ئۆردەرە چالاکەکان', 'Orders', Icons.shopping_bag, Colors.green, isOrders: true)),
+                ],
+              ),
           
           const SizedBox(height: 40),
           
-          // بەشێکی جوانی خوارەوە (بۆ نموونە گرافیک یان زانیاری تر لە داهاتوودا)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(30),
@@ -45,7 +56,7 @@ class DashboardOverview extends StatelessWidget {
               children: [
                 Icon(Icons.auto_graph, size: 80, color: Colors.indigo[100]),
                 const SizedBox(height: 20),
-                const Text('سیستەمی ئۆردەرات لە گەشەکردندایە', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo)),
+                const Text('سیستەمی ئۆردەرات لە گەشەکردندایە', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo)),
               ],
             ),
           )
@@ -56,7 +67,6 @@ class DashboardOverview extends StatelessWidget {
 
   Widget _buildStatCard(String title, String collection, IconData icon, Color color, {bool isOrders = false}) {
     return StreamBuilder<QuerySnapshot>(
-      // ئەگەر ئۆردەر بوو، تەنها ئەوانە دەهێنێت کە تەواو نەبوون، ئەگەرنا هەمووی دەهێنێت
       stream: isOrders 
           ? FirebaseFirestore.instance.collection(collection).where('status', whereIn: ['pending', 'accepted']).snapshots()
           : FirebaseFirestore.instance.collection(collection).snapshots(),
@@ -83,7 +93,7 @@ class DashboardOverview extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 5),
                   snapshot.connectionState == ConnectionState.waiting
                       ? const CircularProgressIndicator()
