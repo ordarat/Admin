@@ -1,6 +1,7 @@
 // Path: lib/screens/main_layout.dart
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // زیادکرا بۆ چوونە دەرەوە
 import 'dashboard_overview.dart';
 import 'manage_users.dart';
 import 'live_tracking.dart'; 
@@ -16,6 +17,7 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
+  // لیستی شاشەکان
   final List<Widget> _screens = [
     const DashboardOverview(),
     const ManageUsersScreen(),
@@ -25,17 +27,21 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    // پشکنین دەکات بزانێت ئایا شاشەکە بچووکە (واتە مۆبایلە)؟
+    // پشکنین بۆ ئەوەی بزانێت شاشەکە مۆبایلە یان کۆمپیوتەر
     bool isMobile = MediaQuery.of(context).size.width < 800;
 
-    // دیزاینی لیستەکەی تەنیشت
+    // دیزاینی مینیوی تەنیشت
     Widget sidebarContent = Column(
       children: [
         const SizedBox(height: 40),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.deepOrange, shape: BoxShape.circle), child: const Icon(Icons.delivery_dining, color: Colors.white, size: 35)),
+            Container(
+              padding: const EdgeInsets.all(8), 
+              decoration: const BoxDecoration(color: Colors.deepOrange, shape: BoxShape.circle), 
+              child: const Icon(Icons.delivery_dining, color: Colors.white, size: 35)
+            ),
             const SizedBox(width: 15),
             const Text('Orderat', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
           ],
@@ -54,14 +60,16 @@ class _MainLayoutState extends State<MainLayout> {
         ListTile(
           leading: const Icon(Icons.logout, color: Colors.redAccent),
           title: const Text('چوونە دەرەوە', style: TextStyle(color: Colors.redAccent, fontSize: 16)),
-          onTap: () {},
+          onTap: () async {
+            // سڕینەوەی سێشن و چوونە دەرەوە بەتەواوی
+            await FirebaseAuth.instance.signOut();
+          },
         ),
         const SizedBox(height: 20),
       ],
     );
 
     return Scaffold(
-      // ئەگەر مۆبایل بوو، ئەپبار و مینیوی شاراوەی بۆ دروست بکە
       appBar: isMobile 
           ? AppBar(
               title: const Text('ئۆردەرات ئەدمین'),
@@ -77,7 +85,6 @@ class _MainLayoutState extends State<MainLayout> {
           : null,
       body: Row(
         children: [
-          // ئەگەر لاپتۆپ بوو، وەک خۆی لە تەنیشت پیشانی بدە
           if (!isMobile)
             Container(
               width: 260,
@@ -85,7 +92,12 @@ class _MainLayoutState extends State<MainLayout> {
               child: sidebarContent,
             ),
           
-          Expanded(child: Container(color: Theme.of(context).scaffoldBackgroundColor, child: _screens[_selectedIndex])),
+          Expanded(
+            child: Container(
+              color: Theme.of(context).scaffoldBackgroundColor, 
+              child: _screens[_selectedIndex]
+            )
+          ),
         ],
       ),
     );
@@ -96,13 +108,16 @@ class _MainLayoutState extends State<MainLayout> {
     return InkWell(
       onTap: () {
         setState(() => _selectedIndex = index);
-        // ئەگەر لە مۆبایل بوو، دوای هەڵبژاردنەکە راستەوخۆ مینیوەکە دابخە
-        if (isMobile) Navigator.pop(context);
+        if (isMobile) Navigator.pop(context); // داخستنی مینیو لە کاتی هەڵبژاردندا بۆ مۆبایل
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-        decoration: BoxDecoration(color: isSelected ? Colors.deepOrange.withOpacity(0.15) : Colors.transparent, borderRadius: BorderRadius.circular(10), border: isSelected ? const Border(left: BorderSide(color: Colors.deepOrange, width: 4)) : null),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.deepOrange.withOpacity(0.15) : Colors.transparent, 
+          borderRadius: BorderRadius.circular(10), 
+          border: isSelected ? const Border(left: BorderSide(color: Colors.deepOrange, width: 4)) : null
+        ),
         child: Row(
           children: [
             Icon(icon, color: isSelected ? Colors.deepOrange : Colors.white60, size: 24),
