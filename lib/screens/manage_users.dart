@@ -3,20 +3,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-class UsersScreen extends StatefulWidget {
-  const UsersScreen({super.key});
+class ManageUsersScreen extends StatefulWidget {
+  const ManageUsersScreen({super.key});
 
   @override
-  State<UsersScreen> createState() => _UsersScreenState();
+  State<ManageUsersScreen> createState() => _ManageUsersScreenState();
 }
 
-class _UsersScreenState extends State<UsersScreen> {
+class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _imageController = TextEditingController();
   
-  String _selectedRole = 'خوارنگەهـ'; // یان 'شۆفێر'
+  String _selectedRole = 'خوارنگەهـ'; 
   bool _isLoading = false;
 
   Future<void> _createNewAccount() async {
@@ -28,33 +28,29 @@ class _UsersScreenState extends State<UsersScreen> {
     setState(() { _isLoading = true; });
 
     try {
-      // ١. رێکخستنی ژمارە و ئیمەیڵ بۆ ئەوەی لەگەڵ مۆبایلەکە یەکبگرێتەوە
       String phoneInput = _phoneController.text.trim();
       String finalPhone = phoneInput.startsWith('0') ? phoneInput : '0$phoneInput';
       String finalEmail = "$finalPhone@company.com";
       String password = _passwordController.text.trim();
 
-      // ٢. دروستکردنی فایەربەیسی کاتی بۆ ئەوەی ئەدمینەکە لۆگئاوت نەبێت! (تایبەتمەندی پرۆفێشناڵ)
       FirebaseApp tempApp = await Firebase.initializeApp(
         name: 'TempApp_${DateTime.now().millisecondsSinceEpoch}',
         options: Firebase.app().options,
       );
 
-      // دروستکردنی هەژمارەکە لە فایەربەیسی کاتی
       UserCredential userCred = await FirebaseAuth.instanceFor(app: tempApp)
           .createUserWithEmailAndPassword(email: finalEmail, password: password);
 
       String newUid = userCred.user!.uid;
 
-      // ٣. خەزنکردنی داتاکان لە داتابەیس بەو شێوەیەی مۆبایلەکە دەیخوێنێتەوە
       if (_selectedRole == 'شۆفێر') {
         await FirebaseFirestore.instance.collection('Drivers').doc(newUid).set({
           'name': _nameController.text.trim(),
           'phone': finalPhone,
           'profile_image': _imageController.text.trim(),
-          'is_active': true,           // زۆر گرنگە بۆ چوونەژوورەوەی مۆبایل
-          'wallet_balance': 0,         // باڵانسی سەرەتایی
-          'completed_orders': 0,       // بۆ سیستەمی خەڵات و ریزبەندی
+          'is_active': true,           
+          'wallet_balance': 0,         
+          'completed_orders': 0,       
           'role': 'driver',
           'created_at': FieldValue.serverTimestamp(),
         });
@@ -63,20 +59,18 @@ class _UsersScreenState extends State<UsersScreen> {
           'name': _nameController.text.trim(),
           'phone': finalPhone,
           'profile_image': _imageController.text.trim(),
-          'is_active': true,           // زۆر گرنگە
+          'is_active': true,           
           'wallet_balance': 0,
           'role': 'restaurant',
           'created_at': FieldValue.serverTimestamp(),
         });
       }
 
-      // سڕینەوەی فایەربەیسە کاتییەکە
       await tempApp.delete();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('هەژمارەکە بە سەرکەوتوویی دروست کرا!'), backgroundColor: Colors.green));
       
-      // پاککردنەوەی خانەکان
       _nameController.clear();
       _phoneController.clear();
       _passwordController.clear();
