@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'dashboard_overview.dart';
 import 'manage_users.dart';
-import 'live_tracking.dart'; // چالاک کرا
-import 'settings_screen.dart'; // چالاک کرا
+import 'live_tracking.dart'; 
+import 'settings_screen.dart'; 
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -16,7 +16,6 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
-  // هەموو شاشەکان لێرەدا دانران
   final List<Widget> _screens = [
     const DashboardOverview(),
     const ManageUsersScreen(),
@@ -26,53 +25,80 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
+    // پشکنین دەکات بزانێت ئایا شاشەکە بچووکە (واتە مۆبایلە)؟
+    bool isMobile = MediaQuery.of(context).size.width < 800;
+
+    // دیزاینی لیستەکەی تەنیشت
+    Widget sidebarContent = Column(
+      children: [
+        const SizedBox(height: 40),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.deepOrange, shape: BoxShape.circle), child: const Icon(Icons.delivery_dining, color: Colors.white, size: 35)),
+            const SizedBox(width: 15),
+            const Text('Orderat', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Text('Admin Dashboard', style: TextStyle(color: Colors.white54, fontSize: 14)),
+        const SizedBox(height: 50),
+        
+        _buildMenuItem(index: 0, title: 'داشبۆرد', icon: Icons.dashboard, isMobile: isMobile),
+        _buildMenuItem(index: 1, title: 'بەکارهێنەران', icon: Icons.people, isMobile: isMobile),
+        _buildMenuItem(index: 2, title: 'نەخشەی راستەوخۆ', icon: Icons.map, isMobile: isMobile),
+        _buildMenuItem(index: 3, title: 'رێکخستنەکان', icon: Icons.settings, isMobile: isMobile),
+        
+        const Spacer(),
+        const Divider(color: Colors.white24),
+        ListTile(
+          leading: const Icon(Icons.logout, color: Colors.redAccent),
+          title: const Text('چوونە دەرەوە', style: TextStyle(color: Colors.redAccent, fontSize: 16)),
+          onTap: () {},
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+
     return Scaffold(
+      // ئەگەر مۆبایل بوو، ئەپبار و مینیوی شاراوەی بۆ دروست بکە
+      appBar: isMobile 
+          ? AppBar(
+              title: const Text('ئۆردەرات ئەدمین'),
+              backgroundColor: const Color(0xFF1E1E2C),
+              foregroundColor: Colors.white,
+            ) 
+          : null,
+      drawer: isMobile 
+          ? Drawer(
+              backgroundColor: const Color(0xFF1E1E2C),
+              child: sidebarContent,
+            ) 
+          : null,
       body: Row(
         children: [
-          Container(
-            width: 260,
-            color: const Color(0xFF1E1E2C),
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.deepOrange, shape: BoxShape.circle), child: const Icon(Icons.delivery_dining, color: Colors.white, size: 35)),
-                    const SizedBox(width: 15),
-                    const Text('Orderat', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Text('Admin Dashboard', style: TextStyle(color: Colors.white54, fontSize: 14)),
-                const SizedBox(height: 50),
-                
-                _buildMenuItem(index: 0, title: 'داشبۆرد', icon: Icons.dashboard),
-                _buildMenuItem(index: 1, title: 'بەکارهێنەران', icon: Icons.people),
-                _buildMenuItem(index: 2, title: 'نەخشەی راستەوخۆ', icon: Icons.map),
-                _buildMenuItem(index: 3, title: 'رێکخستنەکان', icon: Icons.settings),
-                
-                const Spacer(),
-                const Divider(color: Colors.white24),
-                ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.redAccent),
-                  title: const Text('چوونە دەرەوە', style: TextStyle(color: Colors.redAccent, fontSize: 16)),
-                  onTap: () {},
-                ),
-                const SizedBox(height: 20),
-              ],
+          // ئەگەر لاپتۆپ بوو، وەک خۆی لە تەنیشت پیشانی بدە
+          if (!isMobile)
+            Container(
+              width: 260,
+              color: const Color(0xFF1E1E2C),
+              child: sidebarContent,
             ),
-          ),
+          
           Expanded(child: Container(color: Theme.of(context).scaffoldBackgroundColor, child: _screens[_selectedIndex])),
         ],
       ),
     );
   }
 
-  Widget _buildMenuItem({required int index, required String title, required IconData icon}) {
+  Widget _buildMenuItem({required int index, required String title, required IconData icon, required bool isMobile}) {
     bool isSelected = _selectedIndex == index;
     return InkWell(
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () {
+        setState(() => _selectedIndex = index);
+        // ئەگەر لە مۆبایل بوو، دوای هەڵبژاردنەکە راستەوخۆ مینیوەکە دابخە
+        if (isMobile) Navigator.pop(context);
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
