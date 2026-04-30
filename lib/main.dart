@@ -2,39 +2,38 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'screens/admin_login.dart';
+import 'screens/main_layout.dart'; // ئەمە ئەو فایلە نوێیەیە کە دروستی دەکەین
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyDnxL-BwDIeYAD-r0K_NOsMm1i1Za_9OEg",
-      authDomain: "ordarat-app.firebaseapp.com",
-      projectId: "ordarat-app",
-      storageBucket: "ordarat-app.firebasestorage.app",
-      messagingSenderId: "734935691543",
-      appId: "1:734935691543:web:bc364b11c214cdad9c0752",
-      measurementId: "G-B2427LRVWN",
-    ),
-  );
-
-  runApp(const AdminApp());
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase Error: $e');
+  }
+  runApp(const AdminPanelApp());
 }
 
-class AdminApp extends StatelessWidget {
-  const AdminApp({super.key});
+class AdminPanelApp extends StatelessWidget {
+  const AdminPanelApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Ordarat Admin Panel',
+      title: 'Orderat Admin Panel',
       theme: ThemeData(
-        primarySwatch: Colors.indigo,
-        scaffoldBackgroundColor: Colors.grey[100],
+        primaryColor: const Color(0xFF1E1E2C), // رەنگی سەرەکی داشبۆرد (شینێکی تاریکی شاز)
+        scaffoldBackgroundColor: const Color(0xFFF4F7FC), // باکگراوندێکی رەساسی زۆر کاڵ بۆ دەرخستنی کارتەکان
+        cardTheme: CardTheme(
+          color: Colors.white,
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        fontFamily: 'Roboto', // فۆنتێکی ستاندارد و خاوێن
       ),
-      home: const AdminLoginScreen(),
+      // راستەوخۆ دەچێتە ناو داشبۆردە نوێیەکە
+      home: const MainLayout(), 
     );
   }
 }
