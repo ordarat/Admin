@@ -2,11 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'admin_login.dart'; // بۆ ئەوەی راستەوخۆ بینێرینەوە بۆ لۆگین
 import 'dashboard_overview.dart';
-// فایلەکانی تر لە هەنگاوی داهاتوو چالاک دەکەین
-// import 'manage_users.dart';
-// import 'live_tracking.dart'; 
-// import 'settings_screen.dart'; 
+import 'manage_users.dart'; // چالاکمان کرد
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -19,8 +17,8 @@ class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    const DashboardOverview(), // داشبۆردەکە لێرەدا دانرا
-    const Center(child: Text('شاشەی بەکارهێنەران لە هەنگاوی داهاتوو دادەنرێت', style: TextStyle(fontSize: 20))),
+    const DashboardOverview(), 
+    const ManageUsersScreen(), // شاشەی بەکارهێنەران چالاک کرا
     const Center(child: Text('شاشەی نەخشە لە هەنگاوی داهاتوو دادەنرێت', style: TextStyle(fontSize: 20))),
     const Center(child: Text('شاشەی رێکخستنەکان لە هەنگاوی داهاتوو دادەنرێت', style: TextStyle(fontSize: 20))),
   ];
@@ -51,11 +49,25 @@ class _MainLayoutState extends State<MainLayout> {
         
         const Spacer(),
         const Divider(color: Colors.white24),
+        
+        // دوگمەی چوونە دەرەوەی چاککراو
         ListTile(
           leading: const Icon(Icons.logout, color: Colors.redAccent),
           title: const Text('چوونە دەرەوە', style: TextStyle(color: Colors.redAccent, fontSize: 16)),
           onTap: () async {
+            // ١. ئەگەر لەسەر مۆبایلە، یەکەم جار مینیوەکە دابخە
+            if (isMobile) Navigator.pop(context);
+            
+            // ٢. لە فایەربەیس بچۆ دەرەوە
             await FirebaseAuth.instance.signOut();
+            
+            // ٣. بە زۆر بینێرەوە بۆ شاشەی لۆگین بۆ ئەوەی هەڵنەواسراو نەمێنێت
+            if (!mounted) return;
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
+              (route) => false,
+            );
           },
         ),
         const SizedBox(height: 20),
