@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart'; // ئەمەمان زیاد کرد بۆ ناسینەوەی وێب
 import 'screens/admin_login.dart';
 import 'screens/main_layout.dart';
 
@@ -30,13 +31,28 @@ class _AdminAppState extends State<AdminApp> {
 
   Future<void> _initializeFirebaseSafe() async {
     try {
-      // پشکنین دەکات بزانێت پێشتر کارا بووە یان نا
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp();
+        // پشکنینی زیرەک: ئەگەر لەسەر وێب (گیتهاپ) کرایەوە، ئەو کۆدانەی تۆ بەکاردەهێنێت
+        if (kIsWeb) {
+          await Firebase.initializeApp(
+            options: const FirebaseOptions(
+              apiKey: "AIzaSyDnxL-BwDIeYAD-r0K_NOsMm1i1Za_9OEg",
+              authDomain: "ordarat-app.firebaseapp.com",
+              databaseURL: "https://ordarat-app-default-rtdb.europe-west1.firebasedatabase.app",
+              projectId: "ordarat-app",
+              storageBucket: "ordarat-app.firebasestorage.app",
+              messagingSenderId: "734935691543",
+              appId: "1:734935691543:web:bc364b11c214cdad9c0752",
+              measurementId: "G-B2427LRVWN",
+            ),
+          );
+        } else {
+          // ئەگەر لەسەر مۆبایل یان ئیمولەیتەر بوو
+          await Firebase.initializeApp();
+        }
       }
       if (mounted) setState(() => _isInit = true);
     } catch (e) {
-      // لێرەدا ئێرۆرە راستەقینەکە دەگرین بۆ ئەوەی بیخەینە سەر شاشەکە
       if (mounted) setState(() => _errorMessage = e.toString());
       debugPrint('Firebase Error: $e');
     }
@@ -44,7 +60,7 @@ class _AdminAppState extends State<AdminApp> {
 
   @override
   Widget build(BuildContext context) {
-    // ئەگەر کێشەی فایەربەیس هەبوو، ئێرۆرەکەمان بە ئینگلیزی بۆ پیشان دەدات
+    // ئەگەر کێشەی فایەربەیس هەبوو
     if (_errorMessage.isNotEmpty) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -59,7 +75,6 @@ class _AdminAppState extends State<AdminApp> {
                   const SizedBox(height: 20),
                   const Text('کێشە لە پەیوەندی بە داتابەیسەوە هەیە', style: TextStyle(color: Colors.red, fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 15),
-                  // ئەمە ئەو بەشە گرنگەیە کە پێمان دەڵێت کێشەکە چییە
                   Text(_errorMessage, style: const TextStyle(color: Colors.grey, fontSize: 14), textAlign: TextAlign.center),
                 ],
               ),
@@ -80,7 +95,7 @@ class _AdminAppState extends State<AdminApp> {
       );
     }
 
-    // کاتێک هەموو شتێک ئامادەیە، بزانە لۆگین بووە یان نا
+    // کاتێک هەموو شتێک ئامادەیە
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Orderat Admin Control',
