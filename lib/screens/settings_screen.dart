@@ -12,6 +12,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _whatsappController = TextEditingController();
+  final TextEditingController _companyPercentController = TextEditingController();
+  final TextEditingController _driverDeliveryFeeController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -21,21 +23,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    var doc = await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').get();
-    if (doc.exists && doc.data() != null) {
-      setState(() { _whatsappController.text = doc.data()!['whatsapp'] ?? ''; });
+    // هێنانی ژمارەی واتسئاپ
+    var contactDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').get();
+    if (contactDoc.exists && contactDoc.data() != null) {
+      setState(() => _whatsappController.text = contactDoc.data()!['whatsapp'] ?? '');
+    }
+
+    // هێنانی رێکخستنە داراییەکان
+    var financeDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('Financials').get();
+    if (financeDoc.exists && financeDoc.data() != null) {
+      setState(() {
+        _companyPercentController.text = financeDoc.data()!['company_percent']?.toString() ?? '10';
+        _driverDeliveryFeeController.text = financeDoc.data()!['driver_delivery_fee']?.toString() ?? '2000';
+      });
     }
   }
 
   Future<void> _saveSettings() async {
-    if (_whatsappController.text.isEmpty) return;
     setState(() => _isLoading = true);
     try {
+      // سەیڤکردنی واتسئاپ
       await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').set({
         'whatsapp': _whatsappController.text.trim(),
       }, SetOptions(merge: true));
+
+      // سەیڤکردنی دارایی
+      await FirebaseFirestore.instance.collection('App_Settings').doc('Financials').set({
+        'company_percent': double.tryParse(_companyPercentController.text) ?? 10.0,
+        'driver_delivery_fee': double.tryParse(_driverDeliveryFeeController.text) ?? 2000.0,
+      }, SetOptions(merge: true));
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ژمارەکە بە سەرکەوتوویی نوێکرایەوە!'), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رێکخستنەکان بە سەرکەوتوویی نوێکرانەوە!'), backgroundColor: Colors.green));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵە: $e'), backgroundColor: Colors.red));
     } finally {
@@ -54,51 +73,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Text('رێکخستنەکانی سیستەم', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
           const SizedBox(height: 30),
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            child: Padding(
-              padding: EdgeInsets.all(isMobile ? 15.0 : 25.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('ژمارەی واتسئاپ بۆ پەیوەندی کردن', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  const Text('ئەم ژمارەیە لەلایەن شۆفێر و خوارنگەهەکانەوە بەکاردێت بۆ پەیوەندیکردن بە ئیدارەوە.', style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 20),
-                  
-                  isMobile 
-                  ? Column(
-                      children: [
-                        TextField(controller: _whatsappController, decoration: InputDecoration(labelText: 'ژمارەی واتسئاپ بەبێ (+)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.chat, color: Colors.green))),
-                        const SizedBox(height: 15),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 15)),
-                            onPressed: _isLoading ? null : _saveSettings,
-                            icon: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.save),
-                            label: const Text('سەیڤکردن', style: TextStyle(fontSize: 16)),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(child: TextField(controller: _whatsappController, decoration: InputDecoration(labelText: 'ژمارەی واتسئاپ بەبێ (+)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.chat, color: Colors.green)))),
-                        const SizedBox(width: 20),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20)),
-                          onPressed: _isLoading ? null : _saveSettings,
-                          icon: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.save),
-                          label: const Text('سەیڤکردن', style: TextStyle(fontSize: 16)),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
+          
+          // بەشی واتسئاپ
+          _buildCard(
+            title: 'پەیوەندی (واتسئاپ)',
+            subtitle: 'ئەم ژمارەیە بۆ پەیوەندیکردنی شۆفێر و خوارنگەهەکانە.',
+            icon: Icons.chat,
+            color: Colors.green,
+            child: TextField(controller: _whatsappController, decoration: const InputDecoration(labelText: 'ژمارەی واتسئاپ', border: OutlineInputBorder())),
+          ),
+          const SizedBox(height: 20),
+
+          // بەشی دارایی
+          _buildCard(
+            title: 'رێکخستنە داراییەکان',
+            subtitle: 'دیاریکردنی پشکی کۆمپانیا و شۆفێر لە هەر داواکارییەکدا.',
+            icon: Icons.monetization_on,
+            color: Colors.orange,
+            child: Column(
+              children: [
+                TextField(
+                  controller: _companyPercentController, 
+                  keyboardType: TextInputType.number, 
+                  decoration: const InputDecoration(labelText: 'رێژەی قازانجی کۆمپانیا (%)', suffixText: '%', border: OutlineInputBorder())
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: _driverDeliveryFeeController, 
+                  keyboardType: TextInputType.number, 
+                  decoration: const InputDecoration(labelText: 'کرێی جێگیری شۆفێر بۆ هەر گەیاندنێک (دینار)', suffixText: 'IQD', border: OutlineInputBorder())
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 30),
+
+          // دوگمەی سەیڤ
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: _isLoading ? null : _saveSettings,
+              icon: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.save),
+              label: const Text('پاشەکەوتکردنی گۆڕانکارییەکان', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCard({required String title, required String subtitle, required IconData icon, required Color color, required Widget child}) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 30),
+                const SizedBox(width: 10),
+                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(subtitle, style: const TextStyle(color: Colors.grey)),
+            const Divider(height: 30),
+            child,
+          ],
+        ),
       ),
     );
   }
