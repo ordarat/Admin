@@ -12,10 +12,12 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _whatsappController = TextEditingController();
-  final TextEditingController _companyPercentController = TextEditingController();
-  final TextEditingController _driverDeliveryFeeController = TextEditingController();
   
-  // زیادکراوەکان بۆ زۆنی شارەکە
+  // خانە داراییە نوێیەکان بەپێی داواکارییەکەت
+  final TextEditingController _totalFeeController = TextEditingController();
+  final TextEditingController _driverShareController = TextEditingController();
+  final TextEditingController _companyShareController = TextEditingController();
+  
   final TextEditingController _zoneLatController = TextEditingController();
   final TextEditingController _zoneLngController = TextEditingController();
   
@@ -33,19 +35,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _whatsappController.text = contactDoc.data()!['whatsapp'] ?? '');
     }
 
+    // هێنانی داتای دارایی کە تۆ دیاریت کردووە
     var financeDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('Financials').get();
     if (financeDoc.exists && financeDoc.data() != null) {
       setState(() {
-        _companyPercentController.text = financeDoc.data()!['company_percent']?.toString() ?? '10';
-        _driverDeliveryFeeController.text = financeDoc.data()!['driver_delivery_fee']?.toString() ?? '2000';
+        _totalFeeController.text = financeDoc.data()!['total_fee']?.toString() ?? '3000';
+        _driverShareController.text = financeDoc.data()!['driver_share']?.toString() ?? '2500';
+        _companyShareController.text = financeDoc.data()!['company_share']?.toString() ?? '500';
       });
+    } else {
+      _totalFeeController.text = '3000';
+      _driverShareController.text = '2500';
+      _companyShareController.text = '500';
     }
 
-    // هێنانی زۆنی شارەکە
     var zoneDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('MapZone').get();
     if (zoneDoc.exists && zoneDoc.data() != null) {
       setState(() {
-        _zoneLatController.text = zoneDoc.data()!['latitude']?.toString() ?? '36.8679'; // دهۆک وەک دیفۆڵت
+        _zoneLatController.text = zoneDoc.data()!['latitude']?.toString() ?? '36.8679';
         _zoneLngController.text = zoneDoc.data()!['longitude']?.toString() ?? '42.9830';
       });
     } else {
@@ -59,12 +66,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await FirebaseFirestore.instance.collection('App_Settings').doc('Contact').set({'whatsapp': _whatsappController.text.trim()}, SetOptions(merge: true));
       
+      // سەیڤکردنی بڕە پارەکان لە داتابەیس
       await FirebaseFirestore.instance.collection('App_Settings').doc('Financials').set({
-        'company_percent': double.tryParse(_companyPercentController.text) ?? 10.0,
-        'driver_delivery_fee': double.tryParse(_driverDeliveryFeeController.text) ?? 2000.0,
+        'total_fee': num.tryParse(_totalFeeController.text) ?? 3000,
+        'driver_share': num.tryParse(_driverShareController.text) ?? 2500,
+        'company_share': num.tryParse(_companyShareController.text) ?? 500,
       }, SetOptions(merge: true));
 
-      // سەیڤکردنی زۆنی نەخشەکە
       await FirebaseFirestore.instance.collection('App_Settings').doc('MapZone').set({
         'latitude': double.tryParse(_zoneLatController.text) ?? 36.8679,
         'longitude': double.tryParse(_zoneLngController.text) ?? 42.9830,
@@ -91,37 +99,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('رێکخستنەکانی سیستەم', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
           const SizedBox(height: 20),
           
-          // بەشی نەخشە و زۆن
           _buildCard(
-            title: 'زۆنی کارکردن (نەخشە)',
-            subtitle: 'هێڵی درێژی و پانی سەنتەری شارەکەت بنووسە بۆ ئەوەی نەخشەکە فۆکەسی بکاتە سەر.',
-            icon: Icons.map,
-            color: Colors.blue,
-            child: Row(
-              children: [
-                Expanded(child: TextField(controller: _zoneLatController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Latitude (هێڵی پانی)', border: OutlineInputBorder()))),
-                const SizedBox(width: 10),
-                Expanded(child: TextField(controller: _zoneLngController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Longitude (هێڵی درێژی)', border: OutlineInputBorder()))),
-              ],
-            ),
-          ),
-          const SizedBox(height: 15),
-
-          _buildCard(
-            title: 'پەیوەندی (واتسئاپ)', subtitle: 'ئەم ژمارەیە بۆ پەیوەندیکردنی شۆفێر و خوارنگەهەکانە.', icon: Icons.chat, color: Colors.green,
-            child: TextField(controller: _whatsappController, decoration: const InputDecoration(labelText: 'ژمارەی واتسئاپ', border: OutlineInputBorder())),
-          ),
-          const SizedBox(height: 15),
-
-          _buildCard(
-            title: 'رێکخستنە داراییەکان', subtitle: 'پشکی کۆمپانیا و شۆفێر.', icon: Icons.monetization_on, color: Colors.orange,
+            title: 'رێکخستنە داراییەکان (سیستەمی دابەشکردن)', 
+            subtitle: 'لێرەدا ئەو بڕە دیاری بکە کە سیستەم بە ئۆتۆماتیکی دابەشی دەکات.', 
+            icon: Icons.monetization_on, 
+            color: Colors.orange,
             child: Column(
               children: [
-                TextField(controller: _companyPercentController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'رێژەی قازانجی کۆمپانیا (%)', suffixText: '%', border: OutlineInputBorder())),
+                TextField(controller: _totalFeeController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'کۆی نرخی گەیاندن (بۆ نموونە: 3000)', suffixText: 'IQD', border: OutlineInputBorder())),
                 const SizedBox(height: 15),
-                TextField(controller: _driverDeliveryFeeController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'کرێی جێگیری شۆفێر (دینار)', suffixText: 'IQD', border: OutlineInputBorder())),
+                Row(
+                  children: [
+                    Expanded(child: TextField(controller: _driverShareController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'پشکی شۆفێر (2500)', suffixText: 'IQD', border: OutlineInputBorder()))),
+                    const SizedBox(width: 10),
+                    Expanded(child: TextField(controller: _companyShareController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'پشکی کۆمپانیا (500)', suffixText: 'IQD', border: OutlineInputBorder()))),
+                  ],
+                ),
               ],
             ),
+          ),
+          const SizedBox(height: 15),
+
+          _buildCard(
+            title: 'زۆنی کارکردن (نەخشە)', subtitle: 'سەنتەری شارەکەت بنووسە.', icon: Icons.map, color: Colors.blue,
+            child: Row(
+              children: [
+                Expanded(child: TextField(controller: _zoneLatController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Latitude', border: OutlineInputBorder()))),
+                const SizedBox(width: 10),
+                Expanded(child: TextField(controller: _zoneLngController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Longitude', border: OutlineInputBorder()))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 15),
+
+          _buildCard(
+            title: 'پەیوەندی (واتسئاپ)', subtitle: 'ژمارەی پەیوەندیکردنی شۆفێران.', icon: Icons.chat, color: Colors.green,
+            child: TextField(controller: _whatsappController, decoration: const InputDecoration(labelText: 'ژمارەی واتسئاپ', border: OutlineInputBorder())),
           ),
           const SizedBox(height: 30),
 
@@ -145,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Icon(icon, color: color, size: 30), const SizedBox(width: 10), Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))]),
+          Row(children: [Icon(icon, color: color, size: 30), const SizedBox(width: 10), Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))]),
           const SizedBox(height: 5), Text(subtitle, style: const TextStyle(color: Colors.grey)), const Divider(height: 30), child,
         ]),
       ),
