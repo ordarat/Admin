@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:image_picker/image_picker.dart'; // بۆ هەڵبژاردنی وێنەی ناسنامە
-import 'dart:io';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -19,26 +17,19 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
+  // خانە نوێیەکان بۆ لینکی وێنەکان
+  final TextEditingController _idCardUrlController = TextEditingController();
+  final TextEditingController _licenseUrlController = TextEditingController();
+  
   String _selectedRole = 'شۆفێر'; 
   bool _isLoading = false;
 
-  // گۆڕاوەکان بۆ وێنەکان (بۆ قۆناغی داهاتوو کە دەیخەینە سەر فایەربەیس ستۆرج)
-  XFile? _idCardImage;
-  XFile? _licenseImage;
-  final ImagePicker _picker = ImagePicker();
-
-  Future<void> _pickImage(bool isIdCard) async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        if (isIdCard) _idCardImage = image;
-        else _licenseImage = image;
-      });
-    }
-  }
-
   Future<void> _createNewAccount() async {
-    if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _passwordController.text.isEmpty) return;
+    if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تکایە خانە سەرەکییەکان پڕبکەرەوە')));
+      return;
+    }
+    
     setState(() => _isLoading = true);
 
     try {
@@ -54,7 +45,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       Map<String, dynamic> userData = {
         'name': _nameController.text.trim(),
         'phone': finalPhone,
-        'plain_password': password, // پاسوۆردەکە لێرە هەڵدەگرین بۆ ئەوەی ئەدمین بیبینێت
+        'plain_password': password, 
         'is_active': true,           
         'wallet_balance': 0,         
         'completed_orders': 0,       
@@ -62,13 +53,24 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'created_at': FieldValue.serverTimestamp(),
       };
 
+      // ئەگەر شۆفێر بوو، لینکەکانیش سەیڤ بکە
+      if (_selectedRole == 'شۆفێر') {
+        userData['id_card_url'] = _idCardUrlController.text.trim();
+        userData['license_url'] = _licenseUrlController.text.trim();
+      }
+
       await FirebaseFirestore.instance.collection(_selectedRole == 'شۆفێر' ? 'Drivers' : 'Restaurants').doc(newUid).set(userData);
       await tempApp.delete();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('هەژمارەکە دروست کرا!'), backgroundColor: Colors.green));
-      _nameController.clear(); _phoneController.clear(); _passwordController.clear();
-      setState(() { _idCardImage = null; _licenseImage = null; });
+      
+      _nameController.clear(); 
+      _phoneController.clear(); 
+      _passwordController.clear();
+      _idCardUrlController.clear();
+      _licenseUrlController.clear();
+
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('کێشەیەک روویدا: $e'), backgroundColor: Colors.red));
     } finally {
@@ -84,14 +86,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Container(
-            width: 500,
+            width: 600, // کەمێک فراوانتر بۆ ئەوەی وێنەکان جێیان ببێتەوە
             padding: const EdgeInsets.all(25),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // بەشی سەرەوە (لۆگۆ و ناو)
                   Center(
                     child: Column(
                       children: [
@@ -104,7 +105,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   ),
                   const Divider(height: 40, thickness: 2),
 
-                  // بەشی ئامارەکان (باڵانس و ئۆردەر)
                   const Text('ئامارەکان', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
                   const SizedBox(height: 15),
                   Row(
@@ -116,7 +116,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   ),
                   const Divider(height: 40),
 
-                  // بەشی زانیاری تایبەت و پاسوۆرد
                   const Text('زانیارییە تایبەتەکان', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
                   const SizedBox(height: 15),
                   ListTile(
@@ -124,32 +123,23 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     leading: const Icon(Icons.lock, color: Colors.redAccent),
                     title: const Text('وشەی نهێنی هەژمار', style: TextStyle(color: Colors.grey)),
                     subtitle: Text(data['plain_password'] ?? 'نەزانراوە', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      tooltip: 'گۆڕینی پاسوۆرد لێرە (تەنها بۆ داتابەیس)',
-                      onPressed: () {
-                        // لێرەدا دەتوانیت پاسوۆردەکە بگۆڕیت (بۆ قۆناغی داهاتوو)
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('گۆڕینی پاسوۆرد لە داتابەیس بەم زووانە کارا دەبێت')));
-                      },
-                    ),
                   ),
                   const SizedBox(height: 20),
 
-                  // بەشی دۆکیومێنتەکان (بۆ شۆفێر)
+                  // بەشی دۆکیومێنتەکان (بینینی وێنەکان لە رێگەی لینکەوە)
                   if (_selectedRole == 'شۆفێر') ...[
                     const Text('بەڵگەنامە فەرمییەکان', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
                     const SizedBox(height: 15),
                     Row(
                       children: [
-                        Expanded(child: _buildDocumentBox('وێنەی ناسنامە', Icons.badge)),
+                        Expanded(child: _buildDocumentImage('ناسنامە', data['id_card_url'])),
                         const SizedBox(width: 15),
-                        Expanded(child: _buildDocumentBox('مۆڵەتی شۆفێری', Icons.drive_eta)),
+                        Expanded(child: _buildDocumentImage('مۆڵەت', data['license_url'])),
                       ],
                     ),
                     const Divider(height: 40),
                   ],
 
-                  // دوگمەی راگرتن یان چالاککردن
                   SizedBox(
                     width: double.infinity, height: 50,
                     child: ElevatedButton.icon(
@@ -186,17 +176,40 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  Widget _buildDocumentBox(String title, IconData icon) {
-    return Container(
-      height: 100,
-      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[400]!, style: BorderStyle.solid)),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 30, color: Colors.grey[600]), const SizedBox(height: 5),
-          Text(title, style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.bold)),
-        ],
-      ),
+  // فەنکشنی زیرەک بۆ پیشاندانی وێنە لە رێگەی لینکەوە
+  Widget _buildDocumentImage(String title, String? url) {
+    bool hasUrl = url != null && url.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+        const SizedBox(height: 5),
+        Container(
+          height: 150,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.grey[400]!),
+          ),
+          child: hasUrl 
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [Icon(Icons.broken_image, color: Colors.grey, size: 40), Text('لینکەکە هەڵەیە', style: TextStyle(color: Colors.grey))],
+                  ),
+                ),
+              )
+            : const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [Icon(Icons.image_not_supported, color: Colors.grey, size: 40), Text('وێنە دانەنراوە', style: TextStyle(color: Colors.grey))],
+              ),
+        ),
+      ],
     );
   }
 
@@ -239,18 +252,20 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       Expanded(child: TextField(controller: _passwordController, decoration: const InputDecoration(labelText: 'وشەی نهێنی', border: OutlineInputBorder()))),
                     ]),
                   
-                  // بەشی دۆکیومێنت بۆ شۆفێر لە کاتی دروستکردن
+                  // خانەی لینکەکان تەنها بۆ شۆفێر پیشان دەدات
                   if (_selectedRole == 'شۆفێر') ...[
-                    const SizedBox(height: 20),
-                    const Text('وێنەی دۆکیومێنتەکان (بۆ قۆناغی داهاتوو سەیڤ دەکرێت)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 15),
+                    const Text('لینکەکانی دۆکیومێنت (ئارەزوومەندانە)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(child: OutlinedButton.icon(onPressed: () => _pickImage(true), icon: const Icon(Icons.badge), label: Text(_idCardImage == null ? 'ناسنامە' : 'وێنەکە دانرا'))),
-                        const SizedBox(width: 10),
-                        Expanded(child: OutlinedButton.icon(onPressed: () => _pickImage(false), icon: const Icon(Icons.drive_eta), label: Text(_licenseImage == null ? 'مۆڵەت' : 'وێنەکە دانرا'))),
-                      ],
-                    ),
+                    isMobile 
+                    ? Column(children: [
+                        TextField(controller: _idCardUrlController, decoration: const InputDecoration(labelText: 'لینکی وێنەی ناسنامە', prefixIcon: Icon(Icons.link), border: OutlineInputBorder())), const SizedBox(height: 10),
+                        TextField(controller: _licenseUrlController, decoration: const InputDecoration(labelText: 'لینکی مۆڵەتی شۆفێری', prefixIcon: Icon(Icons.link), border: OutlineInputBorder())),
+                      ])
+                    : Row(children: [
+                        Expanded(child: TextField(controller: _idCardUrlController, decoration: const InputDecoration(labelText: 'لینکی وێنەی ناسنامە', prefixIcon: Icon(Icons.link), border: OutlineInputBorder()))), const SizedBox(width: 10),
+                        Expanded(child: TextField(controller: _licenseUrlController, decoration: const InputDecoration(labelText: 'لینکی مۆڵەتی شۆفێری', prefixIcon: Icon(Icons.link), border: OutlineInputBorder()))),
+                      ]),
                   ],
 
                   const SizedBox(height: 20),
@@ -262,7 +277,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           
           const SizedBox(height: 30),
           
-          // لیستی بەکارهێنەران
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             child: Padding(
