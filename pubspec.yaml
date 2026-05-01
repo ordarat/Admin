@@ -1,25 +1,26 @@
-name: admin_panel
-description: Admin Dashboard for Ordarat System.
+name: ordarat_admin
+description: "Ordarat Admin Dashboard Panel."
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   
-  firebase_core: ^2.24.2
-  firebase_auth: ^4.16.0
-  cloud_firestore: ^4.14.0
+  # پاکێجە بنەڕەتییەکان
+  cupertino_icons: ^1.0.6
   
+  # پاکێجەکانی فایەربەیس
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.19.0
+  cloud_firestore: ^4.17.0
+  
+  # پاکێجەکانی نەخشەی راستەوخۆ
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
-  
-  image_picker: ^1.0.7
-  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
