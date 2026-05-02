@@ -8,6 +8,7 @@ import 'dashboard_overview.dart';
 import 'live_orders_board.dart';
 import 'manage_users.dart';
 import 'live_tracking.dart';
+import 'manage_shifts.dart'; 
 import 'financial_report.dart';
 import 'settings_screen.dart';
 import 'employees_screen.dart';
@@ -36,22 +37,43 @@ class _MainLayoutState extends State<MainLayout> {
     _loadUserPermissions();
   }
 
+  // مێشکی سیستەمەکە کە کێشەکەی تۆی چارەسەر کرد
   Future<void> _loadUserPermissions() async {
     try {
-      String uid = FirebaseAuth.instance.currentUser!.uid;
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      String uid = user.uid;
+      String email = user.email ?? 'admin@ordarat.com';
+
+      // پشکنین دەکات بزانێت ئەم کەسە سەڵاحییەتی هەیە لە داتابەیس؟
       var doc = await FirebaseFirestore.instance.collection('Admins').doc(uid).get();
 
       if (doc.exists && doc.data() != null) {
+        // ئەگەر پێشتر هەبوو، سەڵاحییەتەکانی بخوێنەوە
         var data = doc.data()!;
         _isAdmin = data['role'] == 'admin';
         _permissions = data['permissions'] ?? {};
+      } else {
+        // ئەگەر نەبوو (واتە ئەمە تۆیت کە خاوەنی ئەپەکەیت)، یەکسەر دەتکات بە بەڕێوەبەری سەرەکی!
+        await FirebaseFirestore.instance.collection('Admins').doc(uid).set({
+          'name': 'بەڕێوەبەری سەرەکی',
+          'email': email,
+          'role': 'admin', // سەڵاحییەتی رەها
+          'is_active': true,
+          'created_at': FieldValue.serverTimestamp(),
+        });
+        _isAdmin = true;
+        _permissions = {};
       }
 
       _buildDynamicNavigation();
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading permissions: $e');
       await FirebaseAuth.instance.signOut();
@@ -76,6 +98,7 @@ class _MainLayoutState extends State<MainLayout> {
     addScreen('orders', 'ئۆردەرەکان', Icons.view_kanban, const LiveOrdersBoardScreen());
     addScreen('users', 'بەکارهێنەران', Icons.people, const ManageUsersScreen());
     addScreen('map', 'نەخشە', Icons.map, const LiveTrackingScreen());
+    addScreen('shifts', 'شەفتەکان', Icons.access_time_filled, const ManageShiftsScreen());
 
     if (_isAdmin) {
       _activeScreens.add(const EmployeesScreen());
@@ -87,7 +110,7 @@ class _MainLayoutState extends State<MainLayout> {
     addScreen('settings', 'رێکخستن', Icons.settings, const SettingsScreen());
 
     if (_activeScreens.isEmpty) {
-      _activeScreens.add(const Center(child: Text('هیچ سەڵاحییەتێکت نییە، تکایە پەیوەندی بە بەڕێوەبەرەوە بکە', style: TextStyle(fontSize: 18, color: Colors.red))));
+      _activeScreens.add(const Center(child: Text('هیچ سەڵاحییەتێکت نییە', style: TextStyle(fontSize: 18, color: Colors.red))));
       _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.block), label: Text('داخراوە')));
       _bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.block), label: 'داخراوە'));
     }
@@ -96,10 +119,7 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFF4F7FC),
-        body: Center(child: CircularProgressIndicator(color: Colors.indigo)),
-      );
+      return const Scaffold(backgroundColor: Color(0xFFF4F7FC), body: Center(child: CircularProgressIndicator(color: Colors.indigo)));
     }
 
     bool isMobile = MediaQuery.of(context).size.width < 800;
@@ -128,9 +148,7 @@ class _MainLayoutState extends State<MainLayout> {
           if (!isMobile)
             NavigationRail(
               selectedIndex: _currentIndex,
-              onDestinationSelected: (int index) {
-                setState(() => _currentIndex = index);
-              },
+              onDestinationSelected: (int index) => setState(() => _currentIndex = index),
               labelType: NavigationRailLabelType.all,
               backgroundColor: const Color(0xFF1E1E2C),
               unselectedIconTheme: const IconThemeData(color: Colors.white54),
@@ -143,7 +161,6 @@ class _MainLayoutState extends State<MainLayout> {
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1, color: Colors.grey),
           
           Expanded(
-            // لێرەدا وشە کۆنەکەمان گۆڕی بە _activeScreens 
             child: _activeScreens.isNotEmpty && _currentIndex < _activeScreens.length 
               ? _activeScreens[_currentIndex] 
               : const Center(child: Text('شاشەکە بەردەست نییە')), 
