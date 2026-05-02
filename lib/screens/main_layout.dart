@@ -5,9 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 // هێنانی هەموو شاشەکانی ناو فۆڵدەرەکەت
 import 'dashboard_overview.dart';
+import 'live_orders_board.dart'; // ئەمە شاشە نوێیەکەیە (بۆردی ئۆردەرەکان)
 import 'manage_users.dart';
 import 'live_tracking.dart';
-import 'financial_report.dart'; // ئەوەتا راپۆرتە داراییەکەمان هێنا
+import 'financial_report.dart';
 import 'settings_screen.dart';
 import 'admin_login.dart';
 
@@ -21,13 +22,14 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
 
-  // ریزبەندی شاشەکان بەپێی ئەو فایلانەی لە وێنەکەدا هەن
+  // ریزبەندی شاشەکان 
   final List<Widget> _screens = [
     const DashboardOverviewScreen(), // ٠
-    const ManageUsersScreen(),       // ١
-    const LiveTrackingScreen(),      // ٢
-    const FinancialReportScreen(),   // ٣ (بەشە نوێیەکە)
-    const SettingsScreen(),          // ٤
+    const LiveOrdersBoardScreen(),   // ١ (بەشە نوێیەکە لێرە جێگیر کرا)
+    const ManageUsersScreen(),       // ٢
+    const LiveTrackingScreen(),      // ٣
+    const FinancialReportScreen(),   // ٤ 
+    const SettingsScreen(),          // ٥
   ];
 
   @override
@@ -70,6 +72,7 @@ class _MainLayoutState extends State<MainLayout> {
               selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
               destinations: const [
                 NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('داشبۆرد')),
+                NavigationRailDestination(icon: Icon(Icons.view_kanban), label: Text('ئۆردەرەکان')), // دوگمە نوێیەکە
                 NavigationRailDestination(icon: Icon(Icons.people), label: Text('بەکارهێنەران')),
                 NavigationRailDestination(icon: Icon(Icons.map), label: Text('نەخشە')),
                 NavigationRailDestination(icon: Icon(Icons.bar_chart), label: Text('دارایی')),
@@ -92,10 +95,11 @@ class _MainLayoutState extends State<MainLayout> {
               selectedItemColor: Colors.blueAccent,
               unselectedItemColor: Colors.grey,
               backgroundColor: Colors.white,
-              type: BottomNavigationBarType.fixed, // ئەمە زۆر گرنگە بۆ ئەوەی ٥ دوگمە جێگەی ببێتەوە
+              type: BottomNavigationBarType.fixed, // ئەمە زۆر گرنگە بۆ ئەوەی ٦ دوگمە جێگەی ببێتەوە
               elevation: 10,
               items: const [
                 BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'داشبۆرد'),
+                BottomNavigationBarItem(icon: Icon(Icons.view_kanban), label: 'ئۆردەرەکان'), // دوگمە نوێیەکە
                 BottomNavigationBarItem(icon: Icon(Icons.people), label: 'بەکارهێنەران'),
                 BottomNavigationBarItem(icon: Icon(Icons.map), label: 'نەخشە'),
                 BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'دارایی'),
