@@ -37,6 +37,7 @@ class _MainLayoutState extends State<MainLayout> {
     _loadUserPermissions();
   }
 
+  // مێشکی سیستەمەکە کە ئیمەیڵەکە لە فایەربەیسەوە دەخوێنێتەوە
   Future<void> _loadUserPermissions() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -52,30 +53,38 @@ class _MainLayoutState extends State<MainLayout> {
         _isAdmin = data['role'] == 'admin';
         _permissions = data['permissions'] ?? {};
       } 
-      // === قفڵە گەورەکە ===
-      // تێبینی: تکایە لەم دێڕەی خوارەوە، ئیمەیڵەکەی خۆت بنووسە کە دەتەوێت ببێتە خاوەنی کۆمپانیا
-      else if (email.toLowerCase() == 'ئیمەیڵەکەت_لێرە_بنووسە@gmail.com') { 
-        await FirebaseFirestore.instance.collection('Admins').doc(uid).set({
-          'name': 'بەڕێوەبەری سەرەکی',
-          'email': email,
-          'role': 'admin',
-          'is_active': true,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-        _isAdmin = true;
-        _permissions = {};
-      } 
-      // ئەگەر کەسێکی بێگانە بوو
       else {
-        await FirebaseAuth.instance.signOut();
-        if (mounted) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('ببورە، ئەم ئیمەیڵە هیچ سەڵاحییەتێکی نییە!'), 
-            backgroundColor: Colors.red,
-          ));
+        // === لێرەدا دەچێت ئیمەیڵی خاوەن کار لە فایەربەیس دەهێنێت ===
+        var masterDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('MasterAdmin').get();
+        String masterEmail = '';
+        
+        if (masterDoc.exists && masterDoc.data() != null) {
+          masterEmail = masterDoc.data()!['email'] ?? '';
         }
-        return;
+
+        // ئەگەر ئیمەیڵەکەی فایەربەیس و ئیمەیڵی لۆگینەکە یەکیان گرت
+        if (masterEmail.isNotEmpty && email.toLowerCase() == masterEmail.toLowerCase()) { 
+          await FirebaseFirestore.instance.collection('Admins').doc(uid).set({
+            'name': 'بەڕێوەبەری سەرەکی',
+            'email': email,
+            'role': 'admin',
+            'is_active': true,
+            'created_at': FieldValue.serverTimestamp(),
+          });
+          _isAdmin = true;
+          _permissions = {};
+        } 
+        else {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('ببورە، ئەم ئیمەیڵە هیچ سەڵاحییەتێکی نییە!'), 
+              backgroundColor: Colors.red,
+            ));
+          }
+          return;
+        }
       }
 
       _buildDynamicNavigation();
