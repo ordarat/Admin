@@ -3,13 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// هێنانی هەموو شاشەکانی ناو فۆڵدەرەکەت
 import 'dashboard_overview.dart';
-import 'live_orders_board.dart'; // ئەمە شاشە نوێیەکەیە (بۆردی ئۆردەرەکان)
+import 'live_orders_board.dart';
 import 'manage_users.dart';
 import 'live_tracking.dart';
 import 'financial_report.dart';
 import 'settings_screen.dart';
+import 'employees_screen.dart'; // هێنانی شاشەی کارمەندان
 import 'admin_login.dart';
 
 class MainLayout extends StatefulWidget {
@@ -22,14 +22,14 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
 
-  // ریزبەندی شاشەکان 
   final List<Widget> _screens = [
-    const DashboardOverviewScreen(), // ٠
-    const LiveOrdersBoardScreen(),   // ١ (بەشە نوێیەکە لێرە جێگیر کرا)
-    const ManageUsersScreen(),       // ٢
-    const LiveTrackingScreen(),      // ٣
-    const FinancialReportScreen(),   // ٤ 
-    const SettingsScreen(),          // ٥
+    const DashboardOverviewScreen(), 
+    const LiveOrdersBoardScreen(),   
+    const ManageUsersScreen(),       
+    const LiveTrackingScreen(),      
+    const EmployeesScreen(),         // بەشی کارمەندان هاتە ئێرە
+    const FinancialReportScreen(),   
+    const SettingsScreen(),          
   ];
 
   @override
@@ -57,7 +57,6 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       body: Row(
         children: [
-          // ئەگەر شاشەکە گەورە بوو (کۆمپیوتەر)، ئەوا Sidebar پیشان بدە
           if (!isMobile)
             NavigationRail(
               selectedIndex: _currentIndex,
@@ -72,9 +71,10 @@ class _MainLayoutState extends State<MainLayout> {
               selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
               destinations: const [
                 NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('داشبۆرد')),
-                NavigationRailDestination(icon: Icon(Icons.view_kanban), label: Text('ئۆردەرەکان')), // دوگمە نوێیەکە
+                NavigationRailDestination(icon: Icon(Icons.view_kanban), label: Text('ئۆردەرەکان')),
                 NavigationRailDestination(icon: Icon(Icons.people), label: Text('بەکارهێنەران')),
                 NavigationRailDestination(icon: Icon(Icons.map), label: Text('نەخشە')),
+                NavigationRailDestination(icon: Icon(Icons.badge), label: Text('کارمەندان')), // دوگمەی کارمەندان
                 NavigationRailDestination(icon: Icon(Icons.bar_chart), label: Text('دارایی')),
                 NavigationRailDestination(icon: Icon(Icons.settings), label: Text('رێکخستن')),
               ],
@@ -82,12 +82,10 @@ class _MainLayoutState extends State<MainLayout> {
             
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1, color: Colors.grey),
           
-          // پیشاندانی شاشە هەڵبژێردراوەکە
           Expanded(child: _screens[_currentIndex]),
         ],
       ),
       
-      // ئەگەر شاشەکە بچووک بوو (مۆبایل)، ئەوا BottomNavigationBar پیشان بدە
       bottomNavigationBar: isMobile
           ? BottomNavigationBar(
               currentIndex: _currentIndex,
@@ -95,13 +93,14 @@ class _MainLayoutState extends State<MainLayout> {
               selectedItemColor: Colors.blueAccent,
               unselectedItemColor: Colors.grey,
               backgroundColor: Colors.white,
-              type: BottomNavigationBarType.fixed, // ئەمە زۆر گرنگە بۆ ئەوەی ٦ دوگمە جێگەی ببێتەوە
+              type: BottomNavigationBarType.fixed, 
               elevation: 10,
               items: const [
                 BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'داشبۆرد'),
-                BottomNavigationBarItem(icon: Icon(Icons.view_kanban), label: 'ئۆردەرەکان'), // دوگمە نوێیەکە
-                BottomNavigationBarItem(icon: Icon(Icons.people), label: 'بەکارهێنەران'),
+                BottomNavigationBarItem(icon: Icon(Icons.view_kanban), label: 'ئۆردەر'),
+                BottomNavigationBarItem(icon: Icon(Icons.people), label: 'بەکارهێنەر'),
                 BottomNavigationBarItem(icon: Icon(Icons.map), label: 'نەخشە'),
+                BottomNavigationBarItem(icon: Icon(Icons.badge), label: 'کارمەندان'), // دوگمەی کارمەندان
                 BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'دارایی'),
                 BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'رێکخستن'),
               ],
