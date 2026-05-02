@@ -37,34 +37,45 @@ class _MainLayoutState extends State<MainLayout> {
     _loadUserPermissions();
   }
 
-  // مێشکی سیستەمەکە کە کێشەکەی تۆی چارەسەر کرد
   Future<void> _loadUserPermissions() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
       String uid = user.uid;
-      String email = user.email ?? 'admin@ordarat.com';
+      String email = user.email ?? '';
 
-      // پشکنین دەکات بزانێت ئەم کەسە سەڵاحییەتی هەیە لە داتابەیس؟
       var doc = await FirebaseFirestore.instance.collection('Admins').doc(uid).get();
 
       if (doc.exists && doc.data() != null) {
-        // ئەگەر پێشتر هەبوو، سەڵاحییەتەکانی بخوێنەوە
         var data = doc.data()!;
         _isAdmin = data['role'] == 'admin';
         _permissions = data['permissions'] ?? {};
-      } else {
-        // ئەگەر نەبوو (واتە ئەمە تۆیت کە خاوەنی ئەپەکەیت)، یەکسەر دەتکات بە بەڕێوەبەری سەرەکی!
+      } 
+      // === قفڵە گەورەکە ===
+      // تێبینی: تکایە لەم دێڕەی خوارەوە، ئیمەیڵەکەی خۆت بنووسە کە دەتەوێت ببێتە خاوەنی کۆمپانیا
+      else if (email.toLowerCase() == 'ئیمەیڵەکەت_لێرە_بنووسە@gmail.com') { 
         await FirebaseFirestore.instance.collection('Admins').doc(uid).set({
           'name': 'بەڕێوەبەری سەرەکی',
           'email': email,
-          'role': 'admin', // سەڵاحییەتی رەها
+          'role': 'admin',
           'is_active': true,
           'created_at': FieldValue.serverTimestamp(),
         });
         _isAdmin = true;
         _permissions = {};
+      } 
+      // ئەگەر کەسێکی بێگانە بوو
+      else {
+        await FirebaseAuth.instance.signOut();
+        if (mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('ببورە، ئەم ئیمەیڵە هیچ سەڵاحییەتێکی نییە!'), 
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
       }
 
       _buildDynamicNavigation();
