@@ -13,141 +13,112 @@ class LiveOrdersBoardScreen extends StatefulWidget {
 class _LiveOrdersBoardScreenState extends State<LiveOrdersBoardScreen> {
   final Color primaryBlue = const Color(0xFF0056D2);
 
-  // پەنجەرەی دیاریکردنی شۆفێر بە دەستی ئەدمین
-  void _assignDriverManually(String orderId) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('دیاریکردنی شۆفێر', style: TextStyle(color: Colors.indigo)),
-          content: SizedBox(
-            width: 300, height: 400,
-            child: StreamBuilder<QuerySnapshot>(
-              // تەنها ئەو شۆفێرانە دەهێنێت کە ئۆنلاینن
-              stream: FirebaseFirestore.instance.collection('Drivers').where('is_online', isEqualTo: true).snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                var drivers = snapshot.data!.docs;
-                if (drivers.isEmpty) return const Center(child: Text('هیچ شۆفێرێک ئۆنلاین نییە', style: TextStyle(color: Colors.red)));
+  // لیست و ناوی دۆخەکانی ئۆردەر
+  final List<String> _statuses = ['pending', 'preparing', 'delivering', 'completed', 'cancelled'];
+  final Map<String, String> _statusNames = {
+    'pending': 'چاوەڕێکراو (نوێ)',
+    'preparing': 'ئامادەدەکرێت',
+    'delivering': 'لە رێگایە',
+    'completed': 'گەیەندراو',
+    'cancelled': 'ڕەتکراوە'
+  };
 
-                return ListView.builder(
-                  itemCount: drivers.length,
-                  itemBuilder: (context, index) {
-                    var driver = drivers[index].data() as Map<String, dynamic>;
-                    return ListTile(
-                      leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.motorcycle, color: Colors.white)),
-                      title: Text(driver['name'] ?? ''),
-                      subtitle: Text(driver['phone'] ?? ''),
-                      trailing: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, foregroundColor: Colors.white),
-                        onPressed: () async {
-                          // گۆڕینی شۆفێرەکە و گۆڕینی باری ئۆردەرەکە بۆ (وەرگیراو)
-                          await FirebaseFirestore.instance.collection('Orders').doc(orderId).update({
-                            'driver_id': drivers[index].id,
-                            'status': 'accepted',
-                          });
-                          if (!context.mounted) return;
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شۆفێرەکە دیاریکرا!'), backgroundColor: Colors.green));
-                        },
-                        child: const Text('هەڵبژێرە'),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
+  final Map<String, Color> _statusColors = {
+    'pending': Colors.orange,
+    'preparing': Colors.blue,
+    'delivering': Colors.purple,
+    'completed': Colors.green,
+    'cancelled': Colors.red,
+  };
+
+  // گۆڕینی دۆخی ئۆردەر
+  Future<void> _updateOrderStatus(String orderId, String newStatus) async {
+    await FirebaseFirestore.instance.collection('Orders').doc(orderId).update({
+      'status': newStatus,
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('دۆخی ئۆردەرەکە گۆڕدرا بۆ: ${_statusNames[newStatus]}'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 1),
+      ));
+    }
   }
 
-  // کانسەڵکردنی ئۆردەر
-  Future<void> _cancelOrder(String orderId) async {
-    await FirebaseFirestore.instance.collection('Orders').doc(orderId).update({'status': 'cancelled'});
+  // سڕینەوەی ئۆردەر (تەنها بۆ ئەدمین)
+  Future<void> _deleteOrder(String orderId) async {
+    await FirebaseFirestore.instance.collection('Orders').doc(orderId).delete();
   }
 
-  // دروستکردنی ستوونی کارتەکان
-  Widget _buildOrderColumn(String title, Color headerColor, String statusFilter) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(15)),
+  // دروستکردنی ئۆردەری خەیاڵی بۆ تاقیکردنەوە
+  Future<void> _createDummyOrder() async {
+    await FirebaseFirestore.instance.collection('Orders').add({
+      'restaurant_name': 'خوارنگەهی تاقیکردنەوە',
+      'customer_phone': '0750 123 4567',
+      'customer_address': 'گەڕەکی بەختیاری، کۆڵانی ٥',
+      'total_price': 15000,
+      'status': 'pending',
+      'created_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    bool isMobile = MediaQuery.of(context).size.width < 800;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Padding(
+        padding: EdgeInsets.all(isMobile ? 15.0 : 30.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // سەردێڕی ستوونەکە
-            Container(
-              padding: const EdgeInsets.all(15),
-              width: double.infinity,
-              decoration: BoxDecoration(color: headerColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(15))),
-              child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), textAlign: TextAlign.center),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('بۆردی ئۆردەرەکان (Live)', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
+                    const SizedBox(height: 5),
+                    const Text('چاودێری و گۆڕینی دۆخی ئۆردەرەکان بە شێوەی ڕاستەوخۆ', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+                // دوگمەی تاقیکردنەوە
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white),
+                  onPressed: _createDummyOrder,
+                  icon: const Icon(Icons.add_shopping_cart),
+                  label: const Text('ئۆردەری تاقیکردنەوە'),
+                )
+              ],
             ),
+            const SizedBox(height: 20),
             
-            // لیستی ئۆردەرەکانی ناو ئەم ستوونە
+            // بۆردی کانبان
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('Orders').where('status', isEqualTo: statusFilter).snapshots(),
+                stream: FirebaseFirestore.instance.collection('Orders').orderBy('created_at', descending: true).snapshots(),
                 builder: (context, snapshot) {
+                  if (snapshot.hasError) return const Center(child: Text('کێشەیەک هەیە لە هێنانی داتاکان'));
                   if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                  var orders = snapshot.data!.docs;
-                  
-                  if (orders.isEmpty) {
-                    return const Center(child: Text('هیچ ئۆردەرێک نییە', style: TextStyle(color: Colors.grey)));
-                  }
 
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(10),
-                    itemCount: orders.length,
-                    itemBuilder: (context, index) {
-                      var order = orders[index].data() as Map<String, dynamic>;
-                      return Card(
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(15),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(child: Text('لە: ${order['restaurant_name']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                                  Text('${order['total_price']} IQD', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              const Divider(),
-                              Text('بۆ: ${order['delivery_address']}', style: const TextStyle(fontSize: 13)),
-                              Text('مۆبایلی کڕیار: ${order['customer_phone']}', style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                              const SizedBox(height: 10),
-                              
-                              // دوگمەکانی خوارەوەی کارتەکە بەپێی جۆری ستوونەکە دەگۆڕێن
-                              if (statusFilter == 'pending' || statusFilter == 'accepted')
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, foregroundColor: Colors.white),
-                                        onPressed: () => _assignDriverManually(orders[index].id),
-                                        child: Text(statusFilter == 'pending' ? 'دانانی شۆفێر' : 'گۆڕینی شۆفێر', style: const TextStyle(fontSize: 12)),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    IconButton(
-                                      icon: const Icon(Icons.cancel, color: Colors.red),
-                                      tooltip: 'رەتکردنەوەی ئۆردەر',
-                                      onPressed: () => _cancelOrder(orders[index].id),
-                                    ),
-                                  ],
-                                ),
-                              
-                              if (statusFilter == 'completed')
-                                const Center(child: Text('گەیشتووە ✅', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                  var allOrders = snapshot.data!.docs;
+
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _statuses.map((status) {
+                        // جیاکردنەوەی ئۆردەرەکان بەپێی دۆخەکانیان
+                        var statusOrders = allOrders.where((doc) {
+                          var data = doc.data() as Map<String, dynamic>;
+                          return data['status'] == status;
+                        }).toList();
+
+                        return _buildKanbanColumn(status, statusOrders);
+                      }).toList(),
+                    ),
                   );
                 },
               ),
@@ -158,54 +129,111 @@ class _LiveOrdersBoardScreenState extends State<LiveOrdersBoardScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    bool isMobile = MediaQuery.of(context).size.width < 800;
-
-    // ئەگەر مۆبایل بوو با بە شێوەی تاب (Tab) بێت بۆ ئەوەی شاشەکە تێک نەچێت
-    if (isMobile) {
-      return DefaultTabController(
-        length: 3,
-        child: Scaffold(
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            title: const Text('بۆردی ئۆردەرەکان', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            bottom: const TabBar(
-              labelColor: Colors.indigo,
-              indicatorColor: Colors.indigo,
-              tabs: [
-                Tab(text: 'نوێ (چاوەڕێ)'),
-                Tab(text: 'لای شۆفێرە'),
-                Tab(text: 'گەیشتووە'),
+  // دروستکردنی ستوونێکی بۆردەکە
+  Widget _buildKanbanColumn(String status, List<QueryDocumentSnapshot> orders) {
+    Color colColor = _statusColors[status]!;
+    
+    return Container(
+      width: 300,
+      margin: const EdgeInsets.only(left: 15),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        children: [
+          // سەردێڕی ستوونەکە
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: colColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircleAvatar(radius: 12, backgroundColor: colColor, child: Text(orders.length.toString(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                const SizedBox(width: 10),
+                Text(_statusNames[status]!, style: TextStyle(fontWeight: FontWeight.bold, color: colColor, fontSize: 16)),
               ],
             ),
           ),
-          body: TabBarView(
-            children: [
-              _buildOrderColumn('ئۆردەری نوێ', Colors.orange, 'pending'),
-              _buildOrderColumn('لە رێگایە', Colors.blue, 'accepted'),
-              _buildOrderColumn('تەواوکراو', Colors.green, 'completed'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // ئەگەر کۆمپیوتەر یان ئایپاد بوو، با ٣ ستوونەکە بەیەکەوە پیشان بدات (وەک Trello)
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('بۆردی کۆنترۆڵکردنی ئۆردەرەکان (Live Kanban)', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
+          
+          // لیستی کارتەکانی ناو ئەم ستوونە
           Expanded(
-            child: Row(
-              children: [
-                _buildOrderColumn('نوێ (چاوەڕێی شۆفێرە)', Colors.orange, 'pending'),
-                _buildOrderColumn('وەرگیراوە (لە رێگایە)', Colors.blue, 'accepted'),
-                _buildOrderColumn('گەیشتووە (تەواوکراو)', Colors.green, 'completed'),
-              ],
+            child: ListView.builder(
+              itemCount: orders.length,
+              itemBuilder: (context, index) {
+                var data = orders[index].data() as Map<String, dynamic>;
+                String orderId = orders[index].id;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text(data['restaurant_name'] ?? 'نەزانراو', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis)),
+                            IconButton(
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                              onPressed: () => _deleteOrder(orderId),
+                              tooltip: 'سڕینەوەی ئۆردەر',
+                            ),
+                          ],
+                        ),
+                        const Divider(),
+                        Row(children: [const Icon(Icons.phone, size: 14, color: Colors.grey), const SizedBox(width: 5), Text(data['customer_phone'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12))]),
+                        const SizedBox(height: 5),
+                        Row(children: [const Icon(Icons.location_on, size: 14, color: Colors.grey), const SizedBox(width: 5), Expanded(child: Text(data['customer_address'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12), overflow: TextOverflow.ellipsis))]),
+                        const SizedBox(height: 10),
+                        Text('${data['total_price'] ?? 0} IQD', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+                        const SizedBox(height: 10),
+                        
+                        // دوگمەی گۆڕینی دۆخ (Dropdown)
+                        Container(
+                          height: 35,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              value: status,
+                              icon: const Icon(Icons.arrow_drop_down, size: 20),
+                              style: const TextStyle(fontSize: 12, color: Colors.black, fontFamily: 'KurdishFont'),
+                              items: _statuses.map((String s) {
+                                return DropdownMenuItem<String>(
+                                  value: s,
+                                  child: Text('گۆڕین بۆ: ${_statusNames[s]}'),
+                                );
+                              }).toList(),
+                              onChanged: (newVal) {
+                                if (newVal != null && newVal != status) {
+                                  _updateOrderStatus(orderId, newVal);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
