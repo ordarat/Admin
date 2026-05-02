@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'dashboard_overview.dart';
 import 'live_orders_board.dart';
@@ -9,7 +10,7 @@ import 'manage_users.dart';
 import 'live_tracking.dart';
 import 'financial_report.dart';
 import 'settings_screen.dart';
-import 'employees_screen.dart'; // هێنانی شاشەی کارمەندان
+import 'employees_screen.dart';
 import 'admin_login.dart';
 
 class MainLayout extends StatefulWidget {
@@ -21,19 +22,93 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
+  bool _isLoading = true;
+  bool _isAdmin = false;
+  Map<String, dynamic> _permissions = {};
 
-  final List<Widget> _screens = [
-    const DashboardOverviewScreen(), 
-    const LiveOrdersBoardScreen(),   
-    const ManageUsersScreen(),       
-    const LiveTrackingScreen(),      
-    const EmployeesScreen(),         // بەشی کارمەندان هاتە ئێرە
-    const FinancialReportScreen(),   
-    const SettingsScreen(),          
-  ];
+  // لیستی ئەو شاشانەی کە بۆ ئەم کارمەندە دەردەکەون
+  final List<Widget> _activeScreens = [];
+  final List<NavigationRailDestination> _navRailItems = [];
+  final List<BottomNavigationBarItem> _bottomNavItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserPermissions();
+  }
+
+  // هێنانی سەڵاحییەتەکانی کارمەند لە فایەربەیسەوە
+  Future<void> _loadUserPermissions() async {
+    try {
+      String uid = FirebaseAuth.instance.currentUser!.uid;
+      var doc = await FirebaseFirestore.instance.collection('Admins').doc(uid).get();
+
+      if (doc.exists && doc.data() != null) {
+        var data = doc.data()!;
+        _isAdmin = data['role'] == 'admin'; // ئایا Super Adminـە؟
+        _permissions = data['permissions'] ?? {}; // ئەو شاشانەی بۆی کراوەتەوە
+      }
+
+      _buildDynamicNavigation();
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading permissions: $e');
+      await FirebaseAuth.instance.signOut();
+      if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
+    }
+  }
+
+  // دروستکردنی دوگمەکان بەپێی سەڵاحییەت
+  void _buildDynamicNavigation() {
+    _activeScreens.clear();
+    _navRailItems.clear();
+    _bottomNavItems.clear();
+
+    // فەنکشنێک بۆ ئاسانکاری زیادکردنی شاشەکان
+    void addScreen(String id, String title, IconData icon, Widget screen) {
+      if (_isAdmin || _permissions[id] == true) {
+        _activeScreens.add(screen);
+        _navRailItems.add(NavigationRailDestination(icon: Icon(icon), label: Text(title)));
+        _bottomNavItems.add(BottomNavigationBarItem(icon: Icon(icon), label: title));
+      }
+    }
+
+    // پشکنینی سەڵاحییەت بۆ هەر شاشەیەک
+    addScreen('dashboard', 'داشبۆرد', Icons.dashboard, const DashboardOverviewScreen());
+    addScreen('orders', 'ئۆردەرەکان', Icons.view_kanban, const LiveOrdersBoardScreen());
+    addScreen('users', 'بەکارهێنەران', Icons.people, const ManageUsersScreen());
+    addScreen('map', 'نەخشە', Icons.map, const LiveTrackingScreen());
+
+    // بەشی کارمەندان تەنها و تەنها بۆ (Super Admin) کراوەیە!
+    if (_isAdmin) {
+      _activeScreens.add(const EmployeesScreen());
+      _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('کارمەندان')));
+      _bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.badge), label: 'کارمەندان'));
+    }
+
+    addScreen('finance', 'دارایی', Icons.bar_chart, const FinancialReportScreen());
+    addScreen('settings', 'رێکخستن', Icons.settings, const SettingsScreen());
+
+    // ئەگەر کارمەندەکە هیچ سەڵاحییەتێکی نەبوو
+    if (_activeScreens.isEmpty) {
+      _activeScreens.add(const Center(child: Text('هیچ سەڵاحییەتێکت نییە، تکایە پەیوەندی بە بەڕێوەبەرەوە بکە', style: TextStyle(fontSize: 18, color: Colors.red))));
+      _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.block), label: Text('داخراوە')));
+      _bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.block), label: 'داخراوە'));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF4F7FC),
+        body: Center(child: CircularProgressIndicator(color: Colors.indigo)),
+      );
+    }
+
     bool isMobile = MediaQuery.of(context).size.width < 800;
 
     return Scaffold(
@@ -69,20 +144,17 @@ class _MainLayoutState extends State<MainLayout> {
               selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
               unselectedLabelTextStyle: const TextStyle(color: Colors.white54),
               selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-              destinations: const [
-                NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('داشبۆرد')),
-                NavigationRailDestination(icon: Icon(Icons.view_kanban), label: Text('ئۆردەرەکان')),
-                NavigationRailDestination(icon: Icon(Icons.people), label: Text('بەکارهێنەران')),
-                NavigationRailDestination(icon: Icon(Icons.map), label: Text('نەخشە')),
-                NavigationRailDestination(icon: Icon(Icons.badge), label: Text('کارمەندان')), // دوگمەی کارمەندان
-                NavigationRailDestination(icon: Icon(Icons.bar_chart), label: Text('دارایی')),
-                NavigationRailDestination(icon: Icon(Icons.settings), label: Text('رێکخستن')),
-              ],
+              destinations: _navRailItems, // لێرەدا لیستی زیرەکەکەمان دانا
             ),
             
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1, color: Colors.grey),
           
-          Expanded(child: _screens[_currentIndex]),
+          Expanded(
+            // گۆڕینی شاشەکە بەپێی ئەوەی سەڵاحییەتی چی هەیە
+            child: _screens.isNotEmpty && _currentIndex < _activeScreens.length 
+              ? _activeScreens[_currentIndex] 
+              : const Center(child: Text('کێشەیەک هەیە لە کردنەوەی شاشەکە')),
+          ),
         ],
       ),
       
@@ -95,15 +167,7 @@ class _MainLayoutState extends State<MainLayout> {
               backgroundColor: Colors.white,
               type: BottomNavigationBarType.fixed, 
               elevation: 10,
-              items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'داشبۆرد'),
-                BottomNavigationBarItem(icon: Icon(Icons.view_kanban), label: 'ئۆردەر'),
-                BottomNavigationBarItem(icon: Icon(Icons.people), label: 'بەکارهێنەر'),
-                BottomNavigationBarItem(icon: Icon(Icons.map), label: 'نەخشە'),
-                BottomNavigationBarItem(icon: Icon(Icons.badge), label: 'کارمەندان'), // دوگمەی کارمەندان
-                BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'دارایی'),
-                BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'رێکخستن'),
-              ],
+              items: _bottomNavItems, // لێرەدا لیستی زیرەکەکەمان دانا
             )
           : null,
     );
