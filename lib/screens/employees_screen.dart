@@ -16,7 +16,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   final Color primaryBlue = const Color(0xFF0056D2);
   bool _isLoading = false;
 
-  // لیستی هەموو ئەو شاشانەی کە لە سیستەمەکەدا هەن
   final Map<String, String> _allPermissions = {
     'dashboard': 'شاشەی داشبۆرد',
     'orders': 'بۆردی ئۆردەرەکان',
@@ -26,7 +25,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     'settings': 'رێکخستنەکانی سیستەم',
   };
 
-  // پەنجەرەی دروستکردن یان دەستکاریکردنی کارمەند
   void _showEmployeeFormDialog({String? uid, Map<String, dynamic>? existingData}) {
     bool isEditing = uid != null;
     
@@ -36,7 +34,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     
     bool isSuperAdmin = isEditing ? (existingData!['role'] == 'admin') : false;
     
-    // هێنانی دەسەڵاتە کۆنەکان یان دانانی هەمووی بە (False) بۆ کارمەندی نوێ
     Map<String, bool> userPermissions = {};
     _allPermissions.forEach((key, _) {
       if (isEditing && existingData!['permissions'] != null) {
@@ -62,7 +59,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ئەگەر دەستکاری بێت، ناتوانێت ئیمەیڵ بگۆڕێت (لەبەر سکیورێتی فایەربەیس)
                       TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناوی کارمەند', prefixIcon: Icon(Icons.person))),
                       const SizedBox(height: 10),
                       TextField(controller: emailCtrl, enabled: !isEditing, decoration: InputDecoration(labelText: 'ئیمەیڵ', prefixIcon: const Icon(Icons.email), filled: isEditing, fillColor: Colors.grey[200])),
@@ -86,7 +82,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                         const SizedBox(height: 15),
                         const Text('دەسەڵاتەکان (دیاری بکە چ شاشەیەک ببینێت):', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                         const Divider(),
-                        // دروستکردنی چەکەش (Checkbox) بۆ هەموو شاشەکان
                         ..._allPermissions.entries.map((entry) {
                           return CheckboxListTile(
                             title: Text(entry.value),
@@ -112,8 +107,9 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                     if (nameCtrl.text.isEmpty || emailCtrl.text.isEmpty || passCtrl.text.isEmpty) return;
                     Navigator.pop(context);
                     
-                    if (isEditing) {
-                      await _updateEmployee(uid!, nameCtrl.text, isSuperAdmin, userPermissions);
+                    // لێرەدا کێشەکەمان چارەسەر کرد و نیشانەی (!)مان لابرد
+                    if (isEditing && uid != null) {
+                      await _updateEmployee(uid, nameCtrl.text, isSuperAdmin, userPermissions);
                     } else {
                       await _createEmployeeAccount(nameCtrl.text, emailCtrl.text, passCtrl.text, isSuperAdmin, userPermissions);
                     }
@@ -128,7 +124,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     );
   }
 
-  // فەنکشنی دروستکردنی کارمەندی نوێ
   Future<void> _createEmployeeAccount(String name, String email, String pass, bool isSuperAdmin, Map<String, bool> permissions) async {
     setState(() => _isLoading = true);
     try {
@@ -141,7 +136,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
         'email': email.trim(),
         'plain_password': pass.trim(),
         'role': isSuperAdmin ? 'admin' : 'staff',
-        'permissions': isSuperAdmin ? null : permissions, // ئەگەر ئەدمین بێت پێویستی بەمە نییە
+        'permissions': isSuperAdmin ? null : permissions,
         'is_active': true,
         'created_at': FieldValue.serverTimestamp(),
       });
@@ -157,11 +152,10 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     }
   }
 
-  // فەنکشنی نوێکردنەوەی دەسەڵاتەکانی کارمەندی کۆن
-  Future<void> _updateEmployee(String uid, String name, bool isSuperAdmin, Map<String, bool> permissions) async {
+  Future<void> _updateEmployee(String employeeId, String name, bool isSuperAdmin, Map<String, bool> permissions) async {
     setState(() => _isLoading = true);
     try {
-      await FirebaseFirestore.instance.collection('Admins').doc(uid).update({
+      await FirebaseFirestore.instance.collection('Admins').doc(employeeId).update({
         'name': name.trim(),
         'role': isSuperAdmin ? 'admin' : 'staff',
         'permissions': isSuperAdmin ? null : permissions,
@@ -248,7 +242,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // دوگمەی دەستکاریکردنی دەسەڵاتەکان
                               IconButton(
                                 tooltip: 'گۆڕینی دەسەڵاتەکانی ئەم کارمەندە',
                                 icon: const Icon(Icons.edit_note, color: Colors.blue, size: 30),
