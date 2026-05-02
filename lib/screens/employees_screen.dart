@@ -16,49 +16,90 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   final Color primaryBlue = const Color(0xFF0056D2);
   bool _isLoading = false;
 
-  // پەنجەرەی دروستکردنی کارمەندی نوێ
-  void _showAddEmployeeDialog() {
-    final TextEditingController nameCtrl = TextEditingController();
-    final TextEditingController emailCtrl = TextEditingController();
-    final TextEditingController passCtrl = TextEditingController();
-    String selectedRole = 'support'; // دیفۆڵت: کارمەندی ئاسایی
+  // لیستی هەموو ئەو شاشانەی کە لە سیستەمەکەدا هەن
+  final Map<String, String> _allPermissions = {
+    'dashboard': 'شاشەی داشبۆرد',
+    'orders': 'بۆردی ئۆردەرەکان',
+    'users': 'بەڕێوەبردنی بەکارهێنەران',
+    'map': 'نەخشەی راستەوخۆ',
+    'finance': 'راپۆرتی دارایی و قازانج',
+    'settings': 'رێکخستنەکانی سیستەم',
+  };
+
+  // پەنجەرەی دروستکردن یان دەستکاریکردنی کارمەند
+  void _showEmployeeFormDialog({String? uid, Map<String, dynamic>? existingData}) {
+    bool isEditing = uid != null;
+    
+    final TextEditingController nameCtrl = TextEditingController(text: isEditing ? existingData!['name'] : '');
+    final TextEditingController emailCtrl = TextEditingController(text: isEditing ? existingData!['email'] : '');
+    final TextEditingController passCtrl = TextEditingController(text: isEditing ? existingData!['plain_password'] : '');
+    
+    bool isSuperAdmin = isEditing ? (existingData!['role'] == 'admin') : false;
+    
+    // هێنانی دەسەڵاتە کۆنەکان یان دانانی هەمووی بە (False) بۆ کارمەندی نوێ
+    Map<String, bool> userPermissions = {};
+    _allPermissions.forEach((key, _) {
+      if (isEditing && existingData!['permissions'] != null) {
+        userPermissions[key] = existingData['permissions'][key] ?? false;
+      } else {
+        userPermissions[key] = false;
+      }
+    });
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text('دروستکردنی هەژماری کارمەند', style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
+              title: Text(isEditing ? 'گۆڕانکاری لە دەسەڵاتەکانی کارمەند' : 'دروستکردنی کارمەندی نوێ', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
               content: SingleChildScrollView(
                 child: SizedBox(
-                  width: 400,
+                  width: 450,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ئەگەر دەستکاری بێت، ناتوانێت ئیمەیڵ بگۆڕێت (لەبەر سکیورێتی فایەربەیس)
                       TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناوی کارمەند', prefixIcon: Icon(Icons.person))),
                       const SizedBox(height: 10),
-                      TextField(controller: emailCtrl, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'ئیمەیڵ', prefixIcon: Icon(Icons.email))),
+                      TextField(controller: emailCtrl, enabled: !isEditing, decoration: InputDecoration(labelText: 'ئیمەیڵ', prefixIcon: const Icon(Icons.email), filled: isEditing, fillColor: Colors.grey[200])),
                       const SizedBox(height: 10),
-                      TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی (لانی کەم ٦ پیت)', prefixIcon: Icon(Icons.lock))),
+                      TextField(controller: passCtrl, enabled: !isEditing, decoration: InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: const Icon(Icons.lock), filled: isEditing, fillColor: Colors.grey[200])),
                       const SizedBox(height: 20),
                       
-                      const Align(alignment: Alignment.centerRight, child: Text('جۆری سەڵاحییەت:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
-                      RadioListTile(
-                        title: const Text('بەڕێوەبەر (Admin)'),
-                        subtitle: const Text('دەسەڵاتی بەسەر هەموو شتێکدا هەیە', style: TextStyle(fontSize: 12)),
-                        value: 'admin',
-                        groupValue: selectedRole,
-                        onChanged: (val) => setStateDialog(() => selectedRole = val.toString()),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: Colors.purple[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.purple[200]!)),
+                        child: SwitchListTile(
+                          title: const Text('سەڵاحییەتی رەها (Super Admin)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purple)),
+                          subtitle: const Text('دەتوانێت هەموو شتێک ببینێت بێ سنوور'),
+                          value: isSuperAdmin,
+                          activeColor: Colors.purple,
+                          onChanged: (val) => setStateDialog(() => isSuperAdmin = val),
+                        ),
                       ),
-                      RadioListTile(
-                        title: const Text('چاودێر / پاڵپشتی (Support)'),
-                        subtitle: const Text('تەنها دەتوانێت ئۆردەر و نەخشە و بەکارهێنەران ببینێت', style: TextStyle(fontSize: 12)),
-                        value: 'support',
-                        groupValue: selectedRole,
-                        onChanged: (val) => setStateDialog(() => selectedRole = val.toString()),
-                      ),
+                      
+                      if (!isSuperAdmin) ...[
+                        const SizedBox(height: 15),
+                        const Text('دەسەڵاتەکان (دیاری بکە چ شاشەیەک ببینێت):', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                        const Divider(),
+                        // دروستکردنی چەکەش (Checkbox) بۆ هەموو شاشەکان
+                        ..._allPermissions.entries.map((entry) {
+                          return CheckboxListTile(
+                            title: Text(entry.value),
+                            value: userPermissions[entry.key],
+                            activeColor: Colors.green,
+                            onChanged: (val) {
+                              setStateDialog(() {
+                                userPermissions[entry.key] = val ?? false;
+                              });
+                            },
+                          );
+                        }),
+                      ]
                     ],
                   ),
                 ),
@@ -66,13 +107,18 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە', style: TextStyle(color: Colors.red))),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(backgroundColor: isEditing ? Colors.blue : Colors.green, foregroundColor: Colors.white),
                   onPressed: () async {
                     if (nameCtrl.text.isEmpty || emailCtrl.text.isEmpty || passCtrl.text.isEmpty) return;
                     Navigator.pop(context);
-                    await _createEmployeeAccount(nameCtrl.text, emailCtrl.text, passCtrl.text, selectedRole);
+                    
+                    if (isEditing) {
+                      await _updateEmployee(uid!, nameCtrl.text, isSuperAdmin, userPermissions);
+                    } else {
+                      await _createEmployeeAccount(nameCtrl.text, emailCtrl.text, passCtrl.text, isSuperAdmin, userPermissions);
+                    }
                   },
-                  child: const Text('دروستکردن'),
+                  child: Text(isEditing ? 'سەیڤکردنی گۆڕانکاری' : 'دروستکردن'),
                 ),
               ],
             );
@@ -82,11 +128,10 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     );
   }
 
-  // مێشکی دروستکردنی هەژمارەکە لە فایەربەیس
-  Future<void> _createEmployeeAccount(String name, String email, String pass, String role) async {
+  // فەنکشنی دروستکردنی کارمەندی نوێ
+  Future<void> _createEmployeeAccount(String name, String email, String pass, bool isSuperAdmin, Map<String, bool> permissions) async {
     setState(() => _isLoading = true);
     try {
-      // بەکارهێنانی Appی کاتی بۆ ئەوەی ئەدمینە سەرەکییەکە لۆگئاوت نەبێت
       FirebaseApp tempApp = await Firebase.initializeApp(name: 'TempAdminApp', options: Firebase.app().options);
       UserCredential userCred = await FirebaseAuth.instanceFor(app: tempApp).createUserWithEmailAndPassword(email: email.trim(), password: pass.trim());
       String newUid = userCred.user!.uid;
@@ -95,15 +140,15 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
         'name': name.trim(),
         'email': email.trim(),
         'plain_password': pass.trim(),
-        'role': role,
+        'role': isSuperAdmin ? 'admin' : 'staff',
+        'permissions': isSuperAdmin ? null : permissions, // ئەگەر ئەدمین بێت پێویستی بەمە نییە
         'is_active': true,
         'created_at': FieldValue.serverTimestamp(),
       });
 
       await tempApp.delete();
-
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کارمەندەکە بە سەرکەوتوویی زیاد کرا!'), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کارمەندەکە بە سەرکەوتوویی دروست کرا!'), backgroundColor: Colors.green));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵەیەک روویدا: $e'), backgroundColor: Colors.red));
@@ -112,7 +157,25 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     }
   }
 
-  // سڕینەوە یان راگرتنی هەژمار
+  // فەنکشنی نوێکردنەوەی دەسەڵاتەکانی کارمەندی کۆن
+  Future<void> _updateEmployee(String uid, String name, bool isSuperAdmin, Map<String, bool> permissions) async {
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseFirestore.instance.collection('Admins').doc(uid).update({
+        'name': name.trim(),
+        'role': isSuperAdmin ? 'admin' : 'staff',
+        'permissions': isSuperAdmin ? null : permissions,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('دەسەڵاتەکان گۆڕدران!'), backgroundColor: Colors.blue));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەڵە لە گۆڕانکاری: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _toggleEmployeeStatus(String uid, bool currentStatus) async {
     await FirebaseFirestore.instance.collection('Admins').doc(uid).update({'is_active': !currentStatus});
   }
@@ -132,9 +195,9 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('بەڕێوەبردنی کارمەندان', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
+            Text('بەڕێوەبردنی کارمەندان و دەسەڵاتەکان', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
             const SizedBox(height: 10),
-            const Text('لێرە دەتوانیت هەژمار بۆ کارمەندەکانت دروست بکەیت و سەڵاحییەتیان پێ بدەیت.', style: TextStyle(color: Colors.grey)),
+            const Text('دەتوانیت بۆ هەر کارمەندێک بە دەستی خۆت دیاری بکەیت چ شاشەیەک ببینێت.', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 20),
             
             if (_isLoading) const Center(child: LinearProgressIndicator()),
@@ -173,19 +236,25 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 5),
-                              Text('ئیمەیڵ: ${data['email']}'),
-                              Text('پاسۆرد: ${data['plain_password']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text('ئیمەیڵ: ${data['email']} | پاسۆرد: ${data['plain_password']}'),
                               const SizedBox(height: 5),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                                 decoration: BoxDecoration(color: isAdmin ? Colors.purple[50] : Colors.blue[50], borderRadius: BorderRadius.circular(5)),
-                                child: Text(isAdmin ? 'سەڵاحییەت: بەڕێوەبەر (Admin)' : 'سەڵاحییەت: چاودێر (Support)', style: TextStyle(color: isAdmin ? Colors.purple : Colors.blue, fontWeight: FontWeight.bold, fontSize: 12)),
+                                child: Text(isAdmin ? 'سەڵاحییەت: بەڕێوەبەری سەرەکی (Admin)' : 'سەڵاحییەت: کارمەندی دیاریکراو', style: TextStyle(color: isAdmin ? Colors.purple : Colors.blue, fontWeight: FontWeight.bold, fontSize: 12)),
                               ),
                             ],
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // دوگمەی دەستکاریکردنی دەسەڵاتەکان
+                              IconButton(
+                                tooltip: 'گۆڕینی دەسەڵاتەکانی ئەم کارمەندە',
+                                icon: const Icon(Icons.edit_note, color: Colors.blue, size: 30),
+                                onPressed: () => _showEmployeeFormDialog(uid: docId, existingData: data),
+                              ),
+                              const SizedBox(width: 10),
                               Switch(value: isActive, activeColor: Colors.green, onChanged: (val) => _toggleEmployeeStatus(docId, isActive)),
                               IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent), onPressed: () => _deleteEmployee(docId)),
                             ],
@@ -202,7 +271,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: primaryBlue,
-        onPressed: _showAddEmployeeDialog,
+        onPressed: () => _showEmployeeFormDialog(),
         icon: const Icon(Icons.person_add),
         label: const Text('کارمەندی نوێ', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
