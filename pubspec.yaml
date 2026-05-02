@@ -10,7 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   
-  # پاکێجە بنەڕەتییەکان
   cupertino_icons: ^1.0.8
   
   # پاکێجەکانی فایەربەیس
@@ -22,8 +21,11 @@ dependencies:
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
   
-  # پاکێجی دروستکردنی گرافیک و راپۆرتی دارایی (نوێ)
+  # پاکێجی دروستکردنی گرافیک و راپۆرتی دارایی
   fl_chart: ^0.65.0
+  
+  # ئەمە پاکێجە نوێیەکەیە بۆ تەلەفۆنکردن بۆ شۆفێران لەسەر نەخشە
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
