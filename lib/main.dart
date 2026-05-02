@@ -1,166 +1,133 @@
-// Path: lib/screens/main_layout.dart
+// Path: lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'dashboard_overview.dart';
-import 'live_orders_board.dart';
-import 'manage_users.dart';
-import 'live_tracking.dart';
-import 'manage_shifts.dart'; // هێنانی شاشەی شەفتەکان
-import 'financial_report.dart';
-import 'settings_screen.dart';
-import 'employees_screen.dart';
-import 'admin_login.dart';
+// هێنانی شاشەکان بۆ ناو فایلی سەرەکی (ئەمە ئەو دێڕەیە کە کێشەکەی چارەسەر کرد)
+import 'screens/admin_login.dart';
+import 'screens/main_layout.dart';
 
-class MainLayout extends StatefulWidget {
-  const MainLayout({super.key});
-
-  @override
-  State<MainLayout> createState() => _MainLayoutState();
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // کاراکردنی فایەربەیس
+  try {
+    await Firebase.initializeApp(
+      // تێبینیی گرنگ بۆ مامۆستا ئیبراهیم:
+      // ئەگەر پێشتر کۆدێکی درێژی فایەربەیس (apiKey, appId...) لێرە بوو، ئەوا لەناو ئەم قەوسەدا دایبنێوە.
+      // یان ئەگەر فایلی (firebase_options.dart)ت هەیە، دەتوانیت ئەمە بەکاربهێنیت:
+      // options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint("Firebase init error: $e");
+  }
+  
+  runApp(const OrdaratAdminApp());
 }
 
-class _MainLayoutState extends State<MainLayout> {
-  int _currentIndex = 0;
-  bool _isLoading = true;
-  bool _isAdmin = false;
-  Map<String, dynamic> _permissions = {};
+class OrdaratAdminApp extends StatelessWidget {
+  const OrdaratAdminApp({super.key});
 
-  final List<Widget> _activeScreens = [];
-  final List<NavigationRailDestination> _navRailItems = [];
-  final List<BottomNavigationBarItem> _bottomNavItems = [];
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'ئۆردەرات - پەنەڵی بەڕێوەبەر',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primaryColor: const Color(0xFF0056D2),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0056D2)),
+      ),
+      home: const SplashScreen(), // یەکەم شاشە دەچێتە سپلاش سکرین بۆ پشکنین
+    );
+  }
+}
 
+// شاشەی سەرەتا (Splash Screen) کە دیزاینێکی زۆر ناوازەی هەیە
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserPermissions();
+    _checkAuthentication();
   }
 
-  Future<void> _loadUserPermissions() async {
-    try {
-      String uid = FirebaseAuth.instance.currentUser!.uid;
-      var doc = await FirebaseFirestore.instance.collection('Admins').doc(uid).get();
+  // مێشکی ئەپەکە: پشکنین دەکات بزانێت پێشتر لۆگینت کردووە یان نا
+  Future<void> _checkAuthentication() async {
+    // چاوەڕێکردن بۆ ٢ چرکە بۆ ئەوەی لۆگۆکە بە جوانی پیشان بدات
+    await Future.delayed(const Duration(seconds: 2));
 
-      if (doc.exists && doc.data() != null) {
-        var data = doc.data()!;
-        _isAdmin = data['role'] == 'admin';
-        _permissions = data['permissions'] ?? {};
-      }
+    if (!mounted) return;
 
-      _buildDynamicNavigation();
+    // هێنانی داتای بەکارهێنەر لە فایەربەیسەوە
+    User? currentUser = FirebaseAuth.instance.currentUser;
 
-      setState(() {
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('Error loading permissions: $e');
-      await FirebaseAuth.instance.signOut();
-      if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
-    }
-  }
-
-  void _buildDynamicNavigation() {
-    _activeScreens.clear();
-    _navRailItems.clear();
-    _bottomNavItems.clear();
-
-    void addScreen(String id, String title, IconData icon, Widget screen) {
-      if (_isAdmin || _permissions[id] == true) {
-        _activeScreens.add(screen);
-        _navRailItems.add(NavigationRailDestination(icon: Icon(icon), label: Text(title)));
-        _bottomNavItems.add(BottomNavigationBarItem(icon: Icon(icon), label: title));
-      }
-    }
-
-    addScreen('dashboard', 'داشبۆرد', Icons.dashboard, const DashboardOverviewScreen());
-    addScreen('orders', 'ئۆردەرەکان', Icons.view_kanban, const LiveOrdersBoardScreen());
-    addScreen('users', 'بەکارهێنەران', Icons.people, const ManageUsersScreen());
-    addScreen('map', 'نەخشە', Icons.map, const LiveTrackingScreen());
-    
-    // زیادکردنی شاشەی شەفتەکان
-    addScreen('shifts', 'شەفتەکان', Icons.access_time_filled, const ManageShiftsScreen());
-
-    if (_isAdmin) {
-      _activeScreens.add(const EmployeesScreen());
-      _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('کارمەندان')));
-      _bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.badge), label: 'کارمەندان'));
-    }
-
-    addScreen('finance', 'دارایی', Icons.bar_chart, const FinancialReportScreen());
-    addScreen('settings', 'رێکخستن', Icons.settings, const SettingsScreen());
-
-    if (_activeScreens.isEmpty) {
-      _activeScreens.add(const Center(child: Text('هیچ سەڵاحییەتێکت نییە', style: TextStyle(fontSize: 18, color: Colors.red))));
-      _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.block), label: Text('داخراوە')));
-      _bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.block), label: 'داخراوە'));
+    if (currentUser != null) {
+      // ئەگەر لۆگینی کردبوو، ڕاستەوخۆ بیبە بۆ پەنەڵی سەرەکی
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainLayout()),
+      );
+    } else {
+      // ئەگەر لۆگینی نەکردبوو، بیبە بۆ شاشەی چوونەژوورەوە 
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(backgroundColor: Color(0xFFF4F7FC), body: Center(child: CircularProgressIndicator(color: Colors.indigo)));
-    }
-
-    bool isMobile = MediaQuery.of(context).size.width < 800;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FC),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1E1E2C),
-        foregroundColor: Colors.white,
-        title: const Text('ئۆردەرات - پەنەڵی سەرەکی', style: TextStyle(fontWeight: FontWeight.bold)),
-        elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: 'چوونەدەرەوە',
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (!mounted) return;
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
-            },
-          )
-        ],
-      ),
-      body: Row(
-        children: [
-          if (!isMobile)
-            NavigationRail(
-              selectedIndex: _currentIndex,
-              onDestinationSelected: (int index) => setState(() => _currentIndex = index),
-              labelType: NavigationRailLabelType.all,
-              backgroundColor: const Color(0xFF1E1E2C),
-              unselectedIconTheme: const IconThemeData(color: Colors.white54),
-              selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
-              unselectedLabelTextStyle: const TextStyle(color: Colors.white54),
-              selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-              destinations: _navRailItems,
+      backgroundColor: const Color(0xFF1E1E2C), // رەنگی باکگراوندی تاریکی ئەدمین پەنەڵ
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // بازنەیەکی سپی و لۆگۆیەکی شین
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.dashboard_customize,
+                size: 80,
+                color: Color(0xFF0056D2),
+              ),
             ),
-            
-          if (!isMobile) const VerticalDivider(thickness: 1, width: 1, color: Colors.grey),
-          
-          Expanded(
-            child: _activeScreens.isNotEmpty && _currentIndex < _activeScreens.length 
-              ? _activeScreens[_currentIndex] 
-              : const Center(child: Text('شاشەکە بەردەست نییە')), 
-          ),
-        ],
+            const SizedBox(height: 30),
+            const Text(
+              'ئۆردەرات ئەدمین',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'سیستەمی بەڕێوەبردنی گەیاندن',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 50),
+            const CircularProgressIndicator(
+              color: Colors.white,
+            ),
+          ],
+        ),
       ),
-      
-      bottomNavigationBar: isMobile
-          ? BottomNavigationBar(
-              currentIndex: _currentIndex,
-              onTap: (index) => setState(() => _currentIndex = index),
-              selectedItemColor: Colors.blueAccent,
-              unselectedItemColor: Colors.grey,
-              backgroundColor: Colors.white,
-              type: BottomNavigationBarType.fixed, 
-              elevation: 10,
-              items: _bottomNavItems,
-            )
-          : null,
     );
   }
 }
