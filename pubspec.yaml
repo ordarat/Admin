@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   
   # پاکێجە بنەڕەتییەکان
-  cupertino_icons: ^1.0.6
+  cupertino_icons: ^1.0.8
   
   # پاکێجەکانی فایەربەیس
   firebase_core: ^2.32.0
@@ -21,6 +21,9 @@ dependencies:
   # پاکێجەکانی نەخشەی راستەوخۆ
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
+  
+  # پاکێجی دروستکردنی گرافیک و راپۆرتی دارایی (نوێ)
+  fl_chart: ^0.65.0
 
 dev_dependencies:
   flutter_test:
