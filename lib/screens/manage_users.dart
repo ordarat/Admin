@@ -16,21 +16,38 @@ class ManageUsersScreen extends StatefulWidget {
 
 class _ManageUsersScreenState extends State<ManageUsersScreen> {
   String _searchQuery = '';
-  String _selectedCityFilter = 'هەموو شارەکان'; // فلتەری سەرەکی بۆ شاشەکە
+  String _selectedCityFilter = 'هەموو شارەکان';
   bool _isLoading = false;
   final Color primaryBlue = const Color(0xFF0056D2);
 
-  // لیستی شارەکان (دەتوانیت دواتر لێرە زیادی بکەیت)
   final List<String> _cities = ['هەموو شارەکان', 'دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
-  // لیستی شارەکان بۆ کاتی دروستکردنی ئەکاونت (بێ 'هەموو شارەکان')
   final List<String> _formCities = ['دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
 
-  final List<String> _shiftOptions = [
-    'کاتی ئازاد (بێ شەفت)',
-    'شەفتی بەیانی (08:00 بەیانی تا 04:00 ئێوارە)',
-    'شەفتی ئێوارە (04:00 ئێوارە تا 12:00 شەو)',
-    'شەفتی شەوان (12:00 شەو تا 08:00 بەیانی)',
-  ];
+  // لێرەدا لیستەکەمان کرد بە داینامیک بۆ ئەوەی لە فایەربەیسەوە بیخوێنێتەوە
+  List<String> _dynamicShifts = ['کاتی ئازاد (بێ شەفت)'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDynamicShifts();
+  }
+
+  // فەنکشنێک بۆ هێنانی شەفتەکان بە زیندوویی
+  void _loadDynamicShifts() {
+    FirebaseFirestore.instance.collection('Shifts').snapshots().listen((snapshot) {
+      List<String> shifts = ['کاتی ئازاد (بێ شەفت)'];
+      for (var doc in snapshot.docs) {
+        if (doc.data().containsKey('name')) {
+          shifts.add(doc['name']);
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _dynamicShifts = shifts;
+        });
+      }
+    });
+  }
 
   Future<void> _selectDate(BuildContext context, TextEditingController controller) async {
     DateTime? picked = await showDatePicker(
@@ -98,8 +115,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     final TextEditingController contractStartCtrl = TextEditingController();
     final TextEditingController contractEndCtrl = TextEditingController();
     
-    String selectedShift = _shiftOptions[0];
-    String selectedCity = _formCities[0]; // دیفۆڵت شاری یەکەمە
+    // بەکارهێنانی شەفتە داینامیکەکان
+    String selectedShift = _dynamicShifts.isNotEmpty ? _dynamicShifts[0] : 'کاتی ئازاد (بێ شەفت)';
+    String selectedCity = _formCities[0]; 
 
     showDialog(
       context: context,
@@ -113,7 +131,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // هەڵبژاردنی شار بۆ بەکارهێنەری نوێ
                     DropdownButtonFormField<String>(
                       value: selectedCity,
                       decoration: const InputDecoration(labelText: 'شار (پارێزگا)', prefixIcon: Icon(Icons.location_city, color: Colors.blue)),
@@ -133,7 +150,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       DropdownButtonFormField<String>(
                         value: selectedShift,
                         decoration: const InputDecoration(labelText: 'کاتی کارکردن (شەفت)', prefixIcon: Icon(Icons.access_time)),
-                        items: _shiftOptions.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
+                        items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
                       ),
                     ],
@@ -179,7 +196,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       
       Map<String, dynamic> userData = {
         'name': name.trim(), 'phone': finalPhone, 'plain_password': pass.trim(),
-        'city': city, // سەیڤکردنی شارەکە
+        'city': city,
         'is_active': true, 'wallet_balance': 0, 'completed_orders': 0,
         'role': role == 'Drivers' ? 'driver' : 'restaurant', 'created_at': FieldValue.serverTimestamp(),
       };
@@ -210,8 +227,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     final TextEditingController contractStartCtrl = TextEditingController(text: currentData['contract_start'] ?? '');
     final TextEditingController contractEndCtrl = TextEditingController(text: currentData['contract_end'] ?? '');
 
-    String selectedShift = currentData['shift'] ?? _shiftOptions[0];
-    if (!_shiftOptions.contains(selectedShift)) selectedShift = _shiftOptions[0];
+    String selectedShift = currentData['shift'] ?? 'کاتی ئازاد (بێ شەفت)';
+    if (!_dynamicShifts.contains(selectedShift)) selectedShift = _dynamicShifts.isNotEmpty ? _dynamicShifts[0] : 'کاتی ئازاد (بێ شەفت)';
 
     String selectedCity = currentData['city'] ?? _formCities[0];
     if (!_formCities.contains(selectedCity)) selectedCity = _formCities[0];
@@ -247,7 +264,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       DropdownButtonFormField<String>(
                         value: selectedShift,
                         decoration: const InputDecoration(labelText: 'گۆڕینی شەفتی کارکردن', prefixIcon: Icon(Icons.access_time)),
-                        items: _shiftOptions.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
+                        items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
                       ),
                     ],
@@ -346,7 +363,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 Text(data['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 Text(data['phone'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
                 
-                // پیشاندانی شارەکە لەناو پڕۆفایل
                 const SizedBox(height: 5),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -423,7 +439,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           String phone = (data['phone'] ?? '').toString();
           String city = data['city'] ?? '';
           
-          // سیستەمی فلتەرکردنی شارەکان
           bool matchesCity = _selectedCityFilter == 'هەموو شارەکان' || city == _selectedCityFilter;
           bool matchesSearch = name.contains(_searchQuery.toLowerCase()) || phone.contains(_searchQuery);
           
@@ -440,7 +455,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             String uid = docs[index].id;
             bool isActive = data['is_active'] ?? true;
             bool isOnline = collection == 'Drivers' ? (data['is_online'] ?? false) : false;
-            String shift = collection == 'Drivers' ? (data['shift'] ?? 'کاتی ئازاد') : '';
+            String shift = collection == 'Drivers' ? (data['shift'] ?? 'کاتی ئازاد (بێ شەفت)') : '';
             String city = data['city'] ?? 'دیاری نەکراوە';
             
             bool isContractExpired = false;
@@ -472,7 +487,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 title: Row(
                   children: [
                     Expanded(child: Text(data['name'] ?? 'بێ ناو', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, decoration: isActive ? TextDecoration.none : TextDecoration.lineThrough, color: isActive ? Colors.black : Colors.red))),
-                    // پیشاندانی شارەکە بە بچووکی لە تەنیشت ناوەکەی
                     Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(5)), child: Text(city, style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold))),
                   ],
                 ),
@@ -513,7 +527,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   ),
                 ),
                 const SizedBox(width: 15),
-                // فلتەری شارەکان
                 Expanded(
                   flex: 1,
                   child: DropdownButtonFormField<String>(
