@@ -10,79 +10,135 @@ class DashboardOverviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     bool isMobile = MediaQuery.of(context).size.width < 800;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 15.0 : 30.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('داشبۆردی سەرەکی', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
-          const SizedBox(height: 20),
-          
-          // بەکارهێنانی GridView بۆ ئەوەی لەسەر مۆبایل و کۆمپیوتەر رێک بێت
-          GridView.count(
-            crossAxisCount: isMobile ? 1 : 3,
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 20,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: isMobile ? 2.5 : 1.5,
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Padding(
+        padding: EdgeInsets.all(isMobile ? 15.0 : 30.0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildStatCard('ژمارەی شۆفێران', 'Drivers', Icons.motorcycle, Colors.blue),
-              _buildStatCard('ژمارەی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange),
-              _buildStatCard('کۆی ئۆردەرەکان', 'Orders', Icons.shopping_bag, Colors.green),
+              Text('داشبۆردی سەرەکی (ڕاستەقینە)', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
+              const SizedBox(height: 10),
+              const Text('ئەم ئامارانە ڕاستەوخۆ لەناو داتابەیسی فایەربەیسەوە دەخوێندرێنەوە.', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 30),
+
+              // بەشی کارتەکان بە شێوەی زیندوو (Live)
+              GridView.count(
+                crossAxisCount: isMobile ? 1 : 4,
+                crossAxisSpacing: 20,
+                mainAxisSpacing: 20,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: isMobile ? 2.5 : 1.5,
+                children: [
+                  // کارتی 1: ئۆردەرە نوێیەکان (Pending)
+                  _buildLiveStatCard(
+                    title: 'ئۆردەری چاوەڕێکراو',
+                    icon: Icons.shopping_cart,
+                    color: Colors.orange,
+                    stream: FirebaseFirestore.instance.collection('Orders').where('status', isEqualTo: 'pending').snapshots(),
+                    countBuilder: (docs) => docs.length.toString(),
+                  ),
+
+                  // کارتی 2: شۆفێرە ئۆنلاینەکان
+                  _buildLiveStatCard(
+                    title: 'شۆفێرە ئۆنلاینەکان',
+                    icon: Icons.motorcycle,
+                    color: Colors.green,
+                    stream: FirebaseFirestore.instance.collection('Drivers').where('is_online', isEqualTo: true).snapshots(),
+                    countBuilder: (docs) => docs.length.toString(),
+                  ),
+
+                  // کارتی 3: کۆی خوارنگەهەکان
+                  _buildLiveStatCard(
+                    title: 'خوارنگەهەکان',
+                    icon: Icons.restaurant,
+                    color: Colors.blue,
+                    stream: FirebaseFirestore.instance.collection('Restaurants').snapshots(),
+                    countBuilder: (docs) => docs.length.toString(),
+                  ),
+
+                  // کارتی 4: قازانجی ئەمڕۆ (نموونەی کۆکردنەوەی پارە)
+                  _buildLiveStatCard(
+                    title: 'داهاتی ئۆردەرەکان',
+                    icon: Icons.attach_money,
+                    color: Colors.purple,
+                    stream: FirebaseFirestore.instance.collection('Orders').where('status', isEqualTo: 'completed').snapshots(),
+                    countBuilder: (docs) {
+                      double total = 0;
+                      for (var doc in docs) {
+                        // گریمانە دەکەین فێڵدی total_price هەیە
+                        total += (doc.data() as Map<String, dynamic>)['total_price'] ?? 0.0;
+                      }
+                      return '${total.toInt()} IQD';
+                    },
+                  ),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // دروستکردنی کارتی ئامار بە شێوەیەکی زیرەک کە داتا لە فایەربەیسەوە دەهێنێت
-  Widget _buildStatCard(String title, String collectionName, IconData icon, Color color) {
+  // فەنکشنێک بۆ دروستکردنی کارتی زیندوو (Live Card) بە بەکارهێنانی StreamBuilder
+  Widget _buildLiveStatCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required Stream<QuerySnapshot> stream,
+    required String Function(List<QueryDocumentSnapshot>) countBuilder,
+  }) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection(collectionName).snapshots(),
+      stream: stream,
       builder: (context, snapshot) {
-        int count = 0;
-        if (snapshot.hasData) {
-          count = snapshot.data!.docs.length;
+        String displayValue = '...';
+        
+        if (snapshot.hasError) {
+          displayValue = 'هەڵە';
+        } else if (snapshot.hasData) {
+          displayValue = countBuilder(snapshot.data!.docs);
         }
 
-        return Card(
-          elevation: 5,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
-              gradient: LinearGradient(
-                colors: [color.withOpacity(0.8), color],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.3), shape: BoxShape.circle),
-                  child: Icon(icon, color: Colors.white, size: 30),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
-                      if (snapshot.connectionState == ConnectionState.waiting)
-                        const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      else
-                        Text('$count', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-                    ],
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(color: color.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5)),
+            ],
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                    child: Icon(icon, color: color, size: 30),
                   ),
-                ),
-              ],
-            ),
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                displayValue,
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C)),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                title,
+                style: const TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
         );
       },
