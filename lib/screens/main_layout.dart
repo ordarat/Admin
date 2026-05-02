@@ -26,7 +26,6 @@ class _MainLayoutState extends State<MainLayout> {
   bool _isAdmin = false;
   Map<String, dynamic> _permissions = {};
 
-  // لیستی ئەو شاشانەی کە بۆ ئەم کارمەندە دەردەکەون
   final List<Widget> _activeScreens = [];
   final List<NavigationRailDestination> _navRailItems = [];
   final List<BottomNavigationBarItem> _bottomNavItems = [];
@@ -37,7 +36,6 @@ class _MainLayoutState extends State<MainLayout> {
     _loadUserPermissions();
   }
 
-  // هێنانی سەڵاحییەتەکانی کارمەند لە فایەربەیسەوە
   Future<void> _loadUserPermissions() async {
     try {
       String uid = FirebaseAuth.instance.currentUser!.uid;
@@ -45,8 +43,8 @@ class _MainLayoutState extends State<MainLayout> {
 
       if (doc.exists && doc.data() != null) {
         var data = doc.data()!;
-        _isAdmin = data['role'] == 'admin'; // ئایا Super Adminـە؟
-        _permissions = data['permissions'] ?? {}; // ئەو شاشانەی بۆی کراوەتەوە
+        _isAdmin = data['role'] == 'admin';
+        _permissions = data['permissions'] ?? {};
       }
 
       _buildDynamicNavigation();
@@ -61,13 +59,11 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
-  // دروستکردنی دوگمەکان بەپێی سەڵاحییەت
   void _buildDynamicNavigation() {
     _activeScreens.clear();
     _navRailItems.clear();
     _bottomNavItems.clear();
 
-    // فەنکشنێک بۆ ئاسانکاری زیادکردنی شاشەکان
     void addScreen(String id, String title, IconData icon, Widget screen) {
       if (_isAdmin || _permissions[id] == true) {
         _activeScreens.add(screen);
@@ -76,13 +72,11 @@ class _MainLayoutState extends State<MainLayout> {
       }
     }
 
-    // پشکنینی سەڵاحییەت بۆ هەر شاشەیەک
     addScreen('dashboard', 'داشبۆرد', Icons.dashboard, const DashboardOverviewScreen());
     addScreen('orders', 'ئۆردەرەکان', Icons.view_kanban, const LiveOrdersBoardScreen());
     addScreen('users', 'بەکارهێنەران', Icons.people, const ManageUsersScreen());
     addScreen('map', 'نەخشە', Icons.map, const LiveTrackingScreen());
 
-    // بەشی کارمەندان تەنها و تەنها بۆ (Super Admin) کراوەیە!
     if (_isAdmin) {
       _activeScreens.add(const EmployeesScreen());
       _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('کارمەندان')));
@@ -92,7 +86,6 @@ class _MainLayoutState extends State<MainLayout> {
     addScreen('finance', 'دارایی', Icons.bar_chart, const FinancialReportScreen());
     addScreen('settings', 'رێکخستن', Icons.settings, const SettingsScreen());
 
-    // ئەگەر کارمەندەکە هیچ سەڵاحییەتێکی نەبوو
     if (_activeScreens.isEmpty) {
       _activeScreens.add(const Center(child: Text('هیچ سەڵاحییەتێکت نییە، تکایە پەیوەندی بە بەڕێوەبەرەوە بکە', style: TextStyle(fontSize: 18, color: Colors.red))));
       _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.block), label: Text('داخراوە')));
@@ -144,16 +137,16 @@ class _MainLayoutState extends State<MainLayout> {
               selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
               unselectedLabelTextStyle: const TextStyle(color: Colors.white54),
               selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-              destinations: _navRailItems, // لێرەدا لیستی زیرەکەکەمان دانا
+              destinations: _navRailItems,
             ),
             
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1, color: Colors.grey),
           
           Expanded(
-            // گۆڕینی شاشەکە بەپێی ئەوەی سەڵاحییەتی چی هەیە
-            child: _screens.isNotEmpty && _currentIndex < _activeScreens.length 
+            // لێرەدا وشە کۆنەکەمان گۆڕی بە _activeScreens 
+            child: _activeScreens.isNotEmpty && _currentIndex < _activeScreens.length 
               ? _activeScreens[_currentIndex] 
-              : const Center(child: Text('کێشەیەک هەیە لە کردنەوەی شاشەکە')),
+              : const Center(child: Text('شاشەکە بەردەست نییە')), 
           ),
         ],
       ),
@@ -167,7 +160,7 @@ class _MainLayoutState extends State<MainLayout> {
               backgroundColor: Colors.white,
               type: BottomNavigationBarType.fixed, 
               elevation: 10,
-              items: _bottomNavItems, // لێرەدا لیستی زیرەکەکەمان دانا
+              items: _bottomNavItems,
             )
           : null,
     );
