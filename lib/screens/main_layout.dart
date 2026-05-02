@@ -2,11 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'admin_login.dart'; 
+
+// هێنانی هەموو شاشەکانی ناو فۆڵدەرەکەت
 import 'dashboard_overview.dart';
-import 'manage_users.dart'; 
-import 'live_tracking.dart';   // چالاک کرا
-import 'settings_screen.dart'; // چالاک کرا
+import 'manage_users.dart';
+import 'live_tracking.dart';
+import 'financial_report.dart'; // ئەوەتا راپۆرتە داراییەکەمان هێنا
+import 'settings_screen.dart';
+import 'admin_login.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -16,92 +19,90 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  int _selectedIndex = 0;
+  int _currentIndex = 0;
 
-  // هەموو ٤ شاشەکە بە تەواوی ئامادەن
+  // ریزبەندی شاشەکان بەپێی ئەو فایلانەی لە وێنەکەدا هەن
   final List<Widget> _screens = [
-    const DashboardOverview(), 
-    const ManageUsersScreen(), 
-    const LiveTrackingScreen(), 
-    const SettingsScreen(),     
+    const DashboardOverviewScreen(), // ٠
+    const ManageUsersScreen(),       // ١
+    const LiveTrackingScreen(),      // ٢
+    const FinancialReportScreen(),   // ٣ (بەشە نوێیەکە)
+    const SettingsScreen(),          // ٤
   ];
 
   @override
   Widget build(BuildContext context) {
     bool isMobile = MediaQuery.of(context).size.width < 800;
 
-    Widget sidebarContent = Column(
-      children: [
-        const SizedBox(height: 40),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.deepOrange, shape: BoxShape.circle), child: const Icon(Icons.delivery_dining, color: Colors.white, size: 35)),
-            const SizedBox(width: 15),
-            const Text('Orderat', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        const Text('Admin Dashboard', style: TextStyle(color: Colors.white54, fontSize: 14)),
-        const SizedBox(height: 50),
-        
-        _buildMenuItem(index: 0, title: 'داشبۆرد', icon: Icons.dashboard, isMobile: isMobile),
-        _buildMenuItem(index: 1, title: 'بەکارهێنەران', icon: Icons.people, isMobile: isMobile),
-        _buildMenuItem(index: 2, title: 'نەخشەی راستەوخۆ', icon: Icons.map, isMobile: isMobile),
-        _buildMenuItem(index: 3, title: 'رێکخستنەکان', icon: Icons.settings, isMobile: isMobile),
-        
-        const Spacer(),
-        const Divider(color: Colors.white24),
-        
-        ListTile(
-          leading: const Icon(Icons.logout, color: Colors.redAccent),
-          title: const Text('چوونە دەرەوە', style: TextStyle(color: Colors.redAccent, fontSize: 16)),
-          onTap: () async {
-            if (isMobile) Navigator.pop(context);
-            await FirebaseAuth.instance.signOut();
-            if (!mounted) return;
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
-              (route) => false,
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-
     return Scaffold(
-      appBar: isMobile ? AppBar(title: const Text('ئۆردەرات ئەدمین'), backgroundColor: const Color(0xFF1E1E2C), foregroundColor: Colors.white) : null,
-      drawer: isMobile ? Drawer(backgroundColor: const Color(0xFF1E1E2C), child: sidebarContent) : null,
-      body: Row(
-        children: [
-          if (!isMobile) Container(width: 260, color: const Color(0xFF1E1E2C), child: sidebarContent),
-          Expanded(child: Container(color: Theme.of(context).scaffoldBackgroundColor, child: _screens[_selectedIndex])),
+      backgroundColor: const Color(0xFFF4F7FC),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E1E2C),
+        foregroundColor: Colors.white,
+        title: const Text('ئۆردەرات - پەنەڵی سەرەکی', style: TextStyle(fontWeight: FontWeight.bold)),
+        elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'چوونەدەرەوە',
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!mounted) return;
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
+            },
+          )
         ],
       ),
-    );
-  }
-
-  Widget _buildMenuItem({required int index, required String title, required IconData icon, required bool isMobile}) {
-    bool isSelected = _selectedIndex == index;
-    return InkWell(
-      onTap: () {
-        setState(() => _selectedIndex = index);
-        if (isMobile) Navigator.pop(context);
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-        decoration: BoxDecoration(color: isSelected ? Colors.deepOrange.withOpacity(0.15) : Colors.transparent, borderRadius: BorderRadius.circular(10), border: isSelected ? const Border(left: BorderSide(color: Colors.deepOrange, width: 4)) : null),
-        child: Row(
-          children: [
-            Icon(icon, color: isSelected ? Colors.deepOrange : Colors.white60, size: 24),
-            const SizedBox(width: 20),
-            Text(title, style: TextStyle(color: isSelected ? Colors.deepOrange : Colors.white70, fontSize: 16, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-          ],
-        ),
+      body: Row(
+        children: [
+          // ئەگەر شاشەکە گەورە بوو (کۆمپیوتەر)، ئەوا Sidebar پیشان بدە
+          if (!isMobile)
+            NavigationRail(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: (int index) {
+                setState(() => _currentIndex = index);
+              },
+              labelType: NavigationRailLabelType.all,
+              backgroundColor: const Color(0xFF1E1E2C),
+              unselectedIconTheme: const IconThemeData(color: Colors.white54),
+              selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
+              unselectedLabelTextStyle: const TextStyle(color: Colors.white54),
+              selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
+              destinations: const [
+                NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('داشبۆرد')),
+                NavigationRailDestination(icon: Icon(Icons.people), label: Text('بەکارهێنەران')),
+                NavigationRailDestination(icon: Icon(Icons.map), label: Text('نەخشە')),
+                NavigationRailDestination(icon: Icon(Icons.bar_chart), label: Text('دارایی')),
+                NavigationRailDestination(icon: Icon(Icons.settings), label: Text('رێکخستن')),
+              ],
+            ),
+            
+          if (!isMobile) const VerticalDivider(thickness: 1, width: 1, color: Colors.grey),
+          
+          // پیشاندانی شاشە هەڵبژێردراوەکە
+          Expanded(child: _screens[_currentIndex]),
+        ],
       ),
+      
+      // ئەگەر شاشەکە بچووک بوو (مۆبایل)، ئەوا BottomNavigationBar پیشان بدە
+      bottomNavigationBar: isMobile
+          ? BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) => setState(() => _currentIndex = index),
+              selectedItemColor: Colors.blueAccent,
+              unselectedItemColor: Colors.grey,
+              backgroundColor: Colors.white,
+              type: BottomNavigationBarType.fixed, // ئەمە زۆر گرنگە بۆ ئەوەی ٥ دوگمە جێگەی ببێتەوە
+              elevation: 10,
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'داشبۆرد'),
+                BottomNavigationBarItem(icon: Icon(Icons.people), label: 'بەکارهێنەران'),
+                BottomNavigationBarItem(icon: Icon(Icons.map), label: 'نەخشە'),
+                BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'دارایی'),
+                BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'رێکخستن'),
+              ],
+            )
+          : null,
     );
   }
 }
