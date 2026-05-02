@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class DashboardOverview extends StatelessWidget {
-  const DashboardOverview({super.key});
+class DashboardOverviewScreen extends StatelessWidget {
+  const DashboardOverviewScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,71 +15,74 @@ class DashboardOverview extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('پوختەی ئامارەکان', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
-          const SizedBox(height: 10),
-          Text('بەخێربێیت بۆ ژووری کۆنترۆڵی ئۆردەرات.', style: TextStyle(color: Colors.grey, fontSize: isMobile ? 14 : 16)),
-          const SizedBox(height: 40),
+          Text('داشبۆردی سەرەکی', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
+          const SizedBox(height: 20),
           
-          Wrap(
-            spacing: 20,
-            runSpacing: 20,
+          // بەکارهێنانی GridView بۆ ئەوەی لەسەر مۆبایل و کۆمپیوتەر رێک بێت
+          GridView.count(
+            crossAxisCount: isMobile ? 1 : 3,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 20,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: isMobile ? 2.5 : 1.5,
             children: [
-              SizedBox(width: isMobile ? double.infinity : 300, child: _buildStatCard('کۆی شۆفێرەکان', 'Drivers', Icons.motorcycle, Colors.blue)),
-              SizedBox(width: isMobile ? double.infinity : 300, child: _buildStatCard('کۆی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange)),
-              SizedBox(width: isMobile ? double.infinity : 300, child: _buildStatCard('ئۆردەرە چالاکەکان', 'Orders', Icons.shopping_bag, Colors.green, isOrders: true)),
+              _buildStatCard('ژمارەی شۆفێران', 'Drivers', Icons.motorcycle, Colors.blue),
+              _buildStatCard('ژمارەی خوارنگەهەکان', 'Restaurants', Icons.restaurant, Colors.orange),
+              _buildStatCard('کۆی ئۆردەرەکان', 'Orders', Icons.shopping_bag, Colors.green),
             ],
           ),
-          
-          const SizedBox(height: 40),
-          
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(isMobile ? 20 : 30),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.auto_graph, size: isMobile ? 60 : 80, color: Colors.indigo[100]),
-                const SizedBox(height: 20),
-                Text('سیستەمی ئۆردەرات لە گەشەکردندایە', textAlign: TextAlign.center, style: TextStyle(fontSize: isMobile ? 16 : 20, fontWeight: FontWeight.bold, color: Colors.indigo)),
-              ],
-            ),
-          )
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(String title, String collection, IconData icon, Color color, {bool isOrders = false}) {
+  // دروستکردنی کارتی ئامار بە شێوەیەکی زیرەک کە داتا لە فایەربەیسەوە دەهێنێت
+  Widget _buildStatCard(String title, String collectionName, IconData icon, Color color) {
     return StreamBuilder<QuerySnapshot>(
-      stream: isOrders 
-          ? FirebaseFirestore.instance.collection(collection).where('status', whereIn: ['pending', 'accepted']).snapshots()
-          : FirebaseFirestore.instance.collection(collection).snapshots(),
+      stream: FirebaseFirestore.instance.collection(collectionName).snapshots(),
       builder: (context, snapshot) {
         int count = 0;
-        if (snapshot.hasData) count = snapshot.data!.docs.length;
+        if (snapshot.hasData) {
+          count = snapshot.data!.docs.length;
+        }
 
-        return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))], border: Border(bottom: BorderSide(color: color, width: 4))),
-          child: Row(
-            children: [
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, size: 30, color: color)),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 5),
-                    snapshot.connectionState == ConnectionState.waiting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text('$count', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                  ],
-                ),
+        return Card(
+          elevation: 5,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.8), color],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ],
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.3), shape: BoxShape.circle),
+                  child: Icon(icon, color: Colors.white, size: 30),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
+                      if (snapshot.connectionState == ConnectionState.waiting)
+                        const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      else
+                        Text('$count', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
