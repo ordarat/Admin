@@ -2,6 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class FinancialReportScreen extends StatefulWidget {
   const FinancialReportScreen({super.key});
@@ -13,83 +17,17 @@ class FinancialReportScreen extends StatefulWidget {
 class _FinancialReportScreenState extends State<FinancialReportScreen> {
   final Color primaryBlue = const Color(0xFF0056D2);
   
-  // دیفۆڵت: لە ٧ رۆژی رابردووەوە تا ئەمڕۆ
-  DateTime _startDate = DateTime.now().subtract(const Duration(days: 7));
+  // دیاریکردنی کاتی سەرەتا و کۆتایی بۆ ڕاپۆرتەکە (دیفۆڵت: ئەم مانگە)
+  DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _endDate = DateTime.now();
-  
-  bool _isLoading = true;
-  num _periodIncome = 0;
-  int _periodOrdersCount = 0;
-  List<Map<String, dynamic>> _ordersList = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchFinancialData();
-  }
-
-  // هێنانی داتا بەپێی ئەو بەروارەی دیاریکراوە
-  Future<void> _fetchFinancialData() async {
-    setState(() => _isLoading = true);
-    try {
-      // هێنانی هەموو ئۆردەرە تەواوکراوەکان (بۆ ئەوەی کێشەی Indexی فایەربەیس دروست نەبێت، لێرە فلتەری دەکەین)
-      var ordersQuery = await FirebaseFirestore.instance.collection('Orders').where('status', isEqualTo: 'completed').get();
-
-      num totalIncome = 0;
-      List<Map<String, dynamic>> tempOrders = [];
-
-      // هێنانی پشکی کۆمپانیا لە رێکخستنەکان (ئەگەر نەبوو ٥٠٠ دینار حیساب دەکات)
-      var financeDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('Financials').get();
-      num companySharePerOrder = (financeDoc.exists && financeDoc.data() != null) ? (financeDoc.data()!['company_share'] ?? 500) : 500;
-
-      // فلتەرکردنی بەروارەکە
-      for (var doc in ordersQuery.docs) {
-        var data = doc.data();
-        if (data['created_at'] != null) {
-          Timestamp ts = data['created_at'];
-          DateTime orderDate = ts.toDate();
-          
-          // ئایا ئۆردەرەکە دەکەوێتە نێوان ئەو دوو بەروارەی دیاریمان کردووە؟
-          if (orderDate.isAfter(_startDate.subtract(const Duration(days: 1))) && 
-              orderDate.isBefore(_endDate.add(const Duration(days: 1)))) {
-            
-            totalIncome += companySharePerOrder; // زیادکردنی قازانجی کۆمپانیا
-            tempOrders.add(data);
-          }
-        }
-      }
-
-      // رێکخستنی لیستەکە لە نوێترینەوە بۆ کۆنترین
-      tempOrders.sort((a, b) => (b['created_at'] as Timestamp).compareTo(a['created_at'] as Timestamp));
-
-      setState(() {
-        _periodIncome = totalIncome;
-        _periodOrdersCount = tempOrders.length;
-        _ordersList = tempOrders;
-        _isLoading = false;
-      });
-
-    } catch (e) {
-      debugPrint("Error fetching finance: $e");
-      setState(() => _isLoading = false);
-    }
-  }
-
-  // پەنجەرەی هەڵبژاردنی بەروار (Date Range Picker)
   Future<void> _pickDateRange() async {
     DateTimeRange? picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime.now(),
       initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: Colors.indigo, onPrimary: Colors.white, onSurface: Colors.black),
-          ),
-          child: child!,
-        );
-      },
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: Colors.indigo)), child: child!),
     );
 
     if (picked != null) {
@@ -97,122 +35,306 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
         _startDate = picked.start;
         _endDate = picked.end;
       });
-      _fetchFinancialData(); // نوێکردنەوەی داتاکان بەپێی بەروارە نوێیەکە
     }
   }
 
-  String _formatDate(DateTime date) {
-    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  // دروستکردنی فایلی PDF
+  Future<void> _generateAndDownloadPDF(
+      List<QueryDocumentSnapshot> orders, 
+      double totalRevenue, 
+      Map<String, Map<String, dynamic>> restStats, 
+      Map<String, Map<String, dynamic>> driverStats) async {
+    
+    final pdf = pw.Document();
+    final String dateRangeStr = '${DateFormat('yyyy-MM-dd').format(_startDate)} to ${DateFormat('yyyy-MM-dd').format(_endDate)}';
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            // سەردێڕی ڕاپۆرت
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Ordarat - Official Financial Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Date: $dateRangeStr', style: const pw.TextStyle(fontSize: 14)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // ئاماری گشتی
+            pw.Text('1. General Overview', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Divider(),
+            pw.Text('Total Completed Orders: ${orders.length}'),
+            pw.Text('Total Revenue: ${totalRevenue.toInt()} IQD', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 30),
+
+            // ئاماری خوارنگەهەکان
+            pw.Text('2. Restaurants Breakdown', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Divider(),
+            pw.Table.fromTextArray(
+              headers: ['Restaurant Name', 'Total Orders', 'Total Revenue (IQD)'],
+              data: restStats.entries.map((e) => [
+                e.key, 
+                e.value['count'].toString(), 
+                e.value['total'].toInt().toString()
+              ]).toList(),
+            ),
+            pw.SizedBox(height: 30),
+
+            // ئاماری شۆفێران
+            pw.Text('3. Drivers Breakdown', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Divider(),
+            pw.Table.fromTextArray(
+              headers: ['Driver Name', 'Total Deliveries', 'Generated Revenue (IQD)'],
+              data: driverStats.entries.map((e) => [
+                e.key, 
+                e.value['count'].toString(), 
+                e.value['total'].toInt().toString()
+              ]).toList(),
+            ),
+          ];
+        },
+      ),
+    );
+
+    // پیشاندانی شاشەی پرینت/سەیڤکردن
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Ordarat_Financial_Report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     bool isMobile = MediaQuery.of(context).size.width < 800;
+    String dateRangeDisplay = '${DateFormat('yyyy-MM-dd').format(_startDate)}  بۆ  ${DateFormat('yyyy-MM-dd').format(_endDate)}';
 
-    return Padding(
-      padding: EdgeInsets.all(isMobile ? 15.0 : 30.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // سەردێڕ و دوگمەی هەڵبژاردنی بەروار
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Padding(
+          padding: EdgeInsets.all(isMobile ? 15.0 : 30.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('راپۆرتی دارایی', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
-                onPressed: _pickDateRange,
-                icon: const Icon(Icons.calendar_month),
-                label: Text('لە: ${_formatDate(_startDate)} تا ${_formatDate(_endDate)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              // بەشی سەرەوە: سەردێڕ و ساڵنامە
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ڕاپۆرتی دارایی و قازانج', style: TextStyle(fontSize: isMobile ? 22 : 28, fontWeight: FontWeight.bold, color: const Color(0xFF1E1E2C))),
+                      const SizedBox(height: 5),
+                      const Text('بەدواداچوون بۆ داهاتی گشتی، خوارنگەهـ و شۆفێران', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                  if (!isMobile) _buildActionButtons(),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 20),
+              const SizedBox(height: 20),
+              
+              if (isMobile) _buildActionButtons(),
+              if (isMobile) const SizedBox(height: 20),
 
-          if (_isLoading)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
-          else ...[
-            // کارتەکانی ئامار
-            Row(
-              children: [
-                Expanded(
-                  child: _buildSummaryCard(
-                    'قازانجی پوختی کۆمپانیا', '$_periodIncome IQD', Icons.account_balance, [const Color(0xFF0056D2), const Color(0xFF003D99)]
+              // دوگمەی هەڵبژاردنی بەروار
+              InkWell(
+                onTap: _pickDateRange,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  decoration: BoxDecoration(color: Colors.indigo[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.indigo[100]!)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month, color: Colors.indigo),
+                      const SizedBox(width: 10),
+                      Text('بەرواری ڕاپۆرت: $dateRangeDisplay', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo, fontSize: 16)),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.edit, size: 16, color: Colors.indigo),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: _buildSummaryCard(
-                    'ژمارەی ئۆردەرەکان', '$_periodOrdersCount ئۆردەر', Icons.shopping_bag, [Colors.green[600]!, Colors.green[800]!]
-                  ),
+              ),
+              const SizedBox(height: 20),
+
+              // تابی شاشەکان
+              Container(
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                child: const TabBar(
+                  labelColor: Colors.indigo, unselectedLabelColor: Colors.grey, indicatorColor: Colors.indigo, indicatorWeight: 4,
+                  tabs: [Tab(icon: Icon(Icons.pie_chart), text: 'گشتی'), Tab(icon: Icon(Icons.restaurant), text: 'خوارنگەهەکان'), Tab(icon: Icon(Icons.motorcycle), text: 'شۆفێران')],
                 ),
-              ],
-            ),
-            const SizedBox(height: 30),
+              ),
+              const SizedBox(height: 15),
 
-            // لیستی وەسڵەکان
-            const Text('وردەکاری ئۆردەرەکان (لەو بەروارەدا)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
-            const SizedBox(height: 10),
-            
-            Expanded(
-              child: _ordersList.isEmpty 
-              ? const Center(child: Text('هیچ ئۆردەرێک لەم بەروارەدا نییە', style: TextStyle(color: Colors.grey, fontSize: 16)))
-              : ListView.builder(
-                  itemCount: _ordersList.length,
-                  itemBuilder: (context, index) {
-                    var order = _ordersList[index];
-                    DateTime dt = (order['created_at'] as Timestamp).toDate();
-                    String timeString = "${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
-                    String dateString = _formatDate(dt);
+              // جەستەی ڕاپۆرتەکە
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('Orders').where('status', isEqualTo: 'completed').snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-                    return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                      child: ListTile(
-                        leading: const CircleAvatar(backgroundColor: Colors.greenAccent, child: Icon(Icons.check, color: Colors.white)),
-                        title: Text('خوارنگەهـ: ${order['restaurant_name'] ?? 'نەزانراو'}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('گەیشتووەتە: ${order['delivery_address']}\nبەروار: $dateString لە $timeString'),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('${order['total_price']} IQD', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.indigo)),
-                            const Text('نرخی وەسڵ', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                          ],
+                    // فلتەرکردنی داتاکان بەپێی کاتە دیاریکراوەکە
+                    List<QueryDocumentSnapshot> filteredOrders = snapshot.data!.docs.where((doc) {
+                      var data = doc.data() as Map<String, dynamic>;
+                      if (data['created_at'] == null) return false;
+                      DateTime orderDate = (data['created_at'] as Timestamp).toDate();
+                      // پشکنین دەکات بزانێت لەناو کاتەکەدایە یان نا
+                      return orderDate.isAfter(_startDate.subtract(const Duration(days: 1))) && orderDate.isBefore(_endDate.add(const Duration(days: 1)));
+                    }).toList();
+
+                    // ئامادەکردنی داتاکان
+                    double totalRevenue = 0;
+                    Map<String, Map<String, dynamic>> restStats = {};
+                    Map<String, Map<String, dynamic>> driverStats = {};
+
+                    for (var doc in filteredOrders) {
+                      var data = doc.data() as Map<String, dynamic>;
+                      double price = (data['total_price'] ?? 0).toDouble();
+                      String restName = data['restaurant_name'] ?? 'بێ ناو';
+                      String driverName = data['driver_name'] ?? 'بێ شۆفێر';
+
+                      totalRevenue += price;
+
+                      // حیسابی خوارنگەهـ
+                      if (!restStats.containsKey(restName)) restStats[restName] = {'count': 0, 'total': 0.0};
+                      restStats[restName]!['count'] += 1;
+                      restStats[restName]!['total'] += price;
+
+                      // حیسابی شۆفێر
+                      if (!driverStats.containsKey(driverName)) driverStats[driverName] = {'count': 0, 'total': 0.0};
+                      driverStats[driverName]!['count'] += 1;
+                      driverStats[driverName]!['total'] += price;
+                    }
+
+                    // دیزاینی PDF بۆ دوگمەکە
+                    _pdfCallback() => _generateAndDownloadPDF(filteredOrders, totalRevenue, restStats, driverStats);
+
+                    if (filteredOrders.isEmpty) {
+                      return const Center(child: Text('هیچ ئۆردەرێکی تەواوبوو لەم بەروارەدا نییە.', style: TextStyle(color: Colors.grey, fontSize: 18)));
+                    }
+
+                    return Column(
+                      children: [
+                        // دوگمەی داگرتن کە بە داتا نوێیەکان کار دەکات
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+                            onPressed: _pdfCallback,
+                            icon: const Icon(Icons.picture_as_pdf),
+                            label: const Text('دابەزاندنی PDF'),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              // تابی 1: گشتی
+                              _buildGeneralTab(filteredOrders.length, totalRevenue),
+                              // تابی 2: خوارنگەهەکان
+                              _buildListTab(restStats, Icons.restaurant, Colors.orange),
+                              // تابی 3: شۆفێران
+                              _buildListTab(driverStats, Icons.motorcycle, Colors.green),
+                            ],
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
-            ),
-          ],
-        ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // دیزاینی کارتی سەرەوە
-  Widget _buildSummaryCard(String title, String value, IconData icon, List<Color> gradientColors) {
-    return Container(
-      padding: const EdgeInsets.all(25),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: gradientColors),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: gradientColors[0].withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        OutlinedButton.icon(
+          onPressed: () {
+            setState(() {
+              _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
+              _endDate = DateTime.now();
+            });
+          },
+          icon: const Icon(Icons.refresh),
+          label: const Text('گەڕانەوە بۆ ئەم مانگە'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGeneralTab(int totalOrders, double totalRevenue) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _buildStatCard('کۆی گشتی ئۆردەرەکان', totalOrders.toString(), Icons.shopping_bag, Colors.blue)),
+            const SizedBox(width: 20),
+            Expanded(child: _buildStatCard('کۆی داهات (IQD)', totalRevenue.toInt().toString(), Icons.attach_money, Colors.green)),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[200]!)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: Colors.white70, size: 30),
-              const SizedBox(width: 10),
-              Expanded(child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 16))),
+              const Text('تێکڕای نرخی هەر ئۆردەرێک:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey)),
+              Text('${totalOrders > 0 ? (totalRevenue / totalOrders).toInt() : 0} IQD', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.indigo)),
             ],
           ),
-          const SizedBox(height: 15),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+        )
+      ],
+    );
+  }
+
+  Widget _buildListTab(Map<String, Map<String, dynamic>> statsMap, IconData icon, Color color) {
+    var sortedEntries = statsMap.entries.toList()..sort((a, b) => b.value['total'].compareTo(a.value['total']));
+
+    return ListView.builder(
+      itemCount: sortedEntries.length,
+      itemBuilder: (context, index) {
+        var entry = sortedEntries[index];
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: ListTile(
+            leading: CircleAvatar(backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color)),
+            title: Text(entry.key, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            subtitle: Text('کۆی ئۆردەر: ${entry.value['count']}'),
+            trailing: Text('${entry.value['total'].toInt()} IQD', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(25),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withOpacity(0.3)), boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)]),
+      child: Column(
+        children: [
+          Icon(icon, size: 40, color: color),
+          const SizedBox(height: 10),
+          Text(value, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color)),
+          const SizedBox(height: 5),
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 16)),
         ],
       ),
     );
