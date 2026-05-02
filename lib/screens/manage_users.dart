@@ -19,6 +19,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   bool _isLoading = false;
   final Color primaryBlue = const Color(0xFF0056D2);
 
+  // لیستی شەفتەکان بۆ شۆفێران
+  final List<String> _shiftOptions = [
+    'کاتی ئازاد (بێ شەفت)',
+    'شەفتی بەیانی (08:00 بەیانی تا 04:00 ئێوارە)',
+    'شەفتی ئێوارە (04:00 ئێوارە تا 12:00 شەو)',
+    'شەفتی شەوان (12:00 شەو تا 08:00 بەیانی)',
+  ];
+
   // --- ناردنی نامەی تایبەت ---
   void _showNotificationDialog(String? token, String userName) {
     if (token == null || token.isEmpty) {
@@ -77,39 +85,57 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     final TextEditingController nameCtrl = TextEditingController();
     final TextEditingController phoneCtrl = TextEditingController();
     final TextEditingController passCtrl = TextEditingController();
+    String selectedShift = _shiftOptions[0];
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(roleType == 'Drivers' ? 'شۆفێری نوێ' : 'خوارنگەهی نوێ', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناوی تەواو', prefixIcon: Icon(Icons.person))),
-            const SizedBox(height: 10),
-            TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'مۆبایل (بێ سفر)', prefixIcon: Icon(Icons.phone))),
-            const SizedBox(height: 10),
-            TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: Icon(Icons.lock))),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە', style: TextStyle(color: Colors.red))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            onPressed: () async {
-              if (nameCtrl.text.isEmpty || phoneCtrl.text.isEmpty || passCtrl.text.isEmpty) return;
-              Navigator.pop(context);
-              await _createNewAccount(roleType, nameCtrl.text, phoneCtrl.text, passCtrl.text);
-            },
-            child: const Text('دروستکردن'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(roleType == 'Drivers' ? 'شۆفێری نوێ' : 'خوارنگەهی نوێ', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناوی تەواو', prefixIcon: Icon(Icons.person))),
+                  const SizedBox(height: 10),
+                  TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'مۆبایل (بێ سفر)', prefixIcon: Icon(Icons.phone))),
+                  const SizedBox(height: 10),
+                  TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: Icon(Icons.lock))),
+                  
+                  // دیاریکردنی شەفت تەنها بۆ شۆفێران
+                  if (roleType == 'Drivers') ...[
+                    const SizedBox(height: 15),
+                    DropdownButtonFormField<String>(
+                      value: selectedShift,
+                      decoration: const InputDecoration(labelText: 'کاتی کارکردن (شەفت)', prefixIcon: Icon(Icons.access_time)),
+                      items: _shiftOptions.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
+                      onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە', style: TextStyle(color: Colors.red))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                  onPressed: () async {
+                    if (nameCtrl.text.isEmpty || phoneCtrl.text.isEmpty || passCtrl.text.isEmpty) return;
+                    Navigator.pop(context);
+                    await _createNewAccount(roleType, nameCtrl.text, phoneCtrl.text, passCtrl.text, selectedShift);
+                  },
+                  child: const Text('دروستکردن'),
+                ),
+              ],
+            );
+          }
+        );
+      },
     );
   }
 
-  Future<void> _createNewAccount(String role, String name, String phone, String pass) async {
+  Future<void> _createNewAccount(String role, String name, String phone, String pass, String shift) async {
     setState(() => _isLoading = true);
     try {
       String finalPhone = phone.startsWith('0') ? phone : '0$phone';
@@ -122,7 +148,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'is_active': true, 'wallet_balance': 0, 'completed_orders': 0,
         'role': role == 'Drivers' ? 'driver' : 'restaurant', 'created_at': FieldValue.serverTimestamp(),
       };
-      if (role == 'Drivers') userData['is_online'] = false;
+      
+      if (role == 'Drivers') {
+        userData['is_online'] = false;
+        userData['shift'] = shift; // سەیڤکردنی شەفتەکە
+      }
 
       await FirebaseFirestore.instance.collection(role).doc(userCred.user!.uid).set(userData);
       await tempApp.delete();
@@ -135,49 +165,70 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     }
   }
 
-  // --- دەستکاریکردن و گۆڕینی زانیاری (Edit User) ---
+  // --- دەستکاریکردن و گۆڕینی زانیاری (لەگەڵ گۆڕینی شەفت) ---
   void _showEditUserDialog(String uid, String collection, Map<String, dynamic> currentData) {
     final TextEditingController nameCtrl = TextEditingController(text: currentData['name']);
     final TextEditingController phoneCtrl = TextEditingController(text: currentData['phone']);
     final TextEditingController passCtrl = TextEditingController(text: currentData['plain_password']);
+    
+    String selectedShift = currentData['shift'] ?? _shiftOptions[0];
+    if (!_shiftOptions.contains(selectedShift)) selectedShift = _shiftOptions[0];
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('گۆڕینی زانیارییەکان', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناو', prefixIcon: Icon(Icons.person))),
-            const SizedBox(height: 10),
-            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'مۆبایل', prefixIcon: Icon(Icons.phone))),
-            const SizedBox(height: 10),
-            TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی نوێ', prefixIcon: Icon(Icons.lock_reset))),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە', style: TextStyle(color: Colors.red))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(context);
-              await FirebaseFirestore.instance.collection(collection).doc(uid).update({
-                'name': nameCtrl.text.trim(),
-                'phone': phoneCtrl.text.trim(),
-                'plain_password': passCtrl.text.trim(),
-              });
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('زانیارییەکان نوێکرانەوە!'), backgroundColor: Colors.green));
-            },
-            child: const Text('سەیڤکردن'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('گۆڕینی زانیارییەکان', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناو', prefixIcon: Icon(Icons.person))),
+                  const SizedBox(height: 10),
+                  TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'مۆبایل', prefixIcon: Icon(Icons.phone))),
+                  const SizedBox(height: 10),
+                  TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی نوێ', prefixIcon: Icon(Icons.lock_reset))),
+                  
+                  if (collection == 'Drivers') ...[
+                    const SizedBox(height: 15),
+                    DropdownButtonFormField<String>(
+                      value: selectedShift,
+                      decoration: const InputDecoration(labelText: 'گۆڕینی شەفتی کارکردن', prefixIcon: Icon(Icons.access_time)),
+                      items: _shiftOptions.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
+                      onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە', style: TextStyle(color: Colors.red))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    Map<String, dynamic> updates = {
+                      'name': nameCtrl.text.trim(),
+                      'phone': phoneCtrl.text.trim(),
+                      'plain_password': passCtrl.text.trim(),
+                    };
+                    if (collection == 'Drivers') updates['shift'] = selectedShift;
+
+                    await FirebaseFirestore.instance.collection(collection).doc(uid).update(updates);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('زانیارییەکان نوێکرانەوە!'), backgroundColor: Colors.green));
+                  },
+                  child: const Text('سەیڤکردن'),
+                ),
+              ],
+            );
+          }
+        );
+      },
     );
   }
 
-  // --- سڕینەوەی یەکجاری ئەکاونت ---
   void _deleteUser(String uid, String collection, String name) {
     showDialog(
       context: context,
@@ -190,7 +241,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.pop(context);
-              Navigator.pop(context); // داخستنی پڕۆفایلەکەش
+              Navigator.pop(context); 
               await FirebaseFirestore.instance.collection(collection).doc(uid).delete();
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ئەکاونتەکە سڕایەوە.'), backgroundColor: Colors.red));
@@ -202,7 +253,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // --- پڕۆفایلی VIP بەکارهێنەر ---
   void _showUserProfile(String uid, String collection, Map<String, dynamic> data) {
     bool isActive = data['is_active'] ?? true;
     showDialog(
@@ -226,6 +276,17 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 const SizedBox(height: 15),
                 Text(data['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 Text(data['phone'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                
+                // پیشاندانی جۆری شەفتەکە لە پڕۆفایلدا
+                if (collection == 'Drivers') ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.indigo[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.indigo[100]!)),
+                    child: Text(data['shift'] ?? 'کاتی ئازاد (بێ شەفت)', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+                
                 const Divider(height: 40),
 
                 Row(
@@ -290,10 +351,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // --- لیستی بەکارهێنەران لەگەڵ سیستەمی تاج ---
   Widget _buildUserList(String collection) {
     return StreamBuilder<QuerySnapshot>(
-      // لێرەدا نهێنییەکە هەیە: ریزبەندکردن بەپێی زۆرترین ئۆردەر!
       stream: FirebaseFirestore.instance.collection(collection).orderBy('completed_orders', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
@@ -314,12 +373,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             String uid = docs[index].id;
             bool isActive = data['is_active'] ?? true;
             bool isOnline = collection == 'Drivers' ? (data['is_online'] ?? false) : false;
+            String shift = collection == 'Drivers' ? (data['shift'] ?? 'کاتی ئازاد') : '';
             
-            // دیاریکردنی تاجی ریزبەندی
             Widget? crown;
-            if (index == 0 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.amber, size: 30); // ئاڵتوون
-            else if (index == 1 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.grey, size: 30); // زیو
-            else if (index == 2 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.brown, size: 30); // بڕۆنز
+            if (index == 0 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.amber, size: 30); 
+            else if (index == 1 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.grey, size: 30); 
+            else if (index == 2 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.brown, size: 30); 
 
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
@@ -338,7 +397,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   ],
                 ),
                 title: Text(data['name'] ?? 'بێ ناو', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, decoration: isActive ? TextDecoration.none : TextDecoration.lineThrough, color: isActive ? Colors.black : Colors.red)),
-                subtitle: Text('${data['phone']}\nباڵانس: ${data['wallet_balance'] ?? 0} IQD | ئۆردەر: ${data['completed_orders'] ?? 0}', style: const TextStyle(height: 1.5)),
+                subtitle: Text('${data['phone']}\nباڵانس: ${data['wallet_balance'] ?? 0} IQD | ئۆردەر: ${data['completed_orders'] ?? 0}${collection == 'Drivers' ? '\n$shift' : ''}', style: const TextStyle(height: 1.5)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
               ),
             );
