@@ -4,20 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// هێنانی شاشەکان بۆ ناو فایلی سەرەکی (ئەمە ئەو دێڕەیە کە کێشەکەی چارەسەر کرد)
 import 'screens/admin_login.dart';
 import 'screens/main_layout.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // کاراکردنی فایەربەیس
   try {
+    // بەستنەوەی فایەربەیس بە کۆدەکانی خۆتەوە
     await Firebase.initializeApp(
-      // تێبینیی گرنگ بۆ مامۆستا ئیبراهیم:
-      // ئەگەر پێشتر کۆدێکی درێژی فایەربەیس (apiKey, appId...) لێرە بوو، ئەوا لەناو ئەم قەوسەدا دایبنێوە.
-      // یان ئەگەر فایلی (firebase_options.dart)ت هەیە، دەتوانیت ئەمە بەکاربهێنیت:
-      // options: DefaultFirebaseOptions.currentPlatform,
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyDnxL-BwDIeYAD-r0K_NOsMm1i1Za_9OEg",
+        authDomain: "ordarat-app.firebaseapp.com",
+        databaseURL: "https://ordarat-app-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "ordarat-app",
+        storageBucket: "ordarat-app.firebasestorage.app",
+        messagingSenderId: "734935691543",
+        appId: "1:734935691543:web:bc364b11c214cdad9c0752",
+        measurementId: "G-B2427LRVWN",
+      ),
     );
   } catch (e) {
     debugPrint("Firebase init error: $e");
@@ -38,12 +43,11 @@ class OrdaratAdminApp extends StatelessWidget {
         primaryColor: const Color(0xFF0056D2),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0056D2)),
       ),
-      home: const SplashScreen(), // یەکەم شاشە دەچێتە سپلاش سکرین بۆ پشکنین
+      home: const SplashScreen(), 
     );
   }
 }
 
-// شاشەی سەرەتا (Splash Screen) کە دیزاینێکی زۆر ناوازەی هەیە
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -52,80 +56,65 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  String _errorMessage = '';
+
   @override
   void initState() {
     super.initState();
     _checkAuthentication();
   }
 
-  // مێشکی ئەپەکە: پشکنین دەکات بزانێت پێشتر لۆگینت کردووە یان نا
   Future<void> _checkAuthentication() async {
-    // چاوەڕێکردن بۆ ٢ چرکە بۆ ئەوەی لۆگۆکە بە جوانی پیشان بدات
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
-    // هێنانی داتای بەکارهێنەر لە فایەربەیسەوە
-    User? currentUser = FirebaseAuth.instance.currentUser;
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
 
-    if (currentUser != null) {
-      // ئەگەر لۆگینی کردبوو، ڕاستەوخۆ بیبە بۆ پەنەڵی سەرەکی
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainLayout()),
-      );
-    } else {
-      // ئەگەر لۆگینی نەکردبوو، بیبە بۆ شاشەی چوونەژوورەوە 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
-      );
+      if (currentUser != null) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainLayout()));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'کێشە هەیە لە بەستنەوەی فایەربەیس!\nتکایە دڵنیابە کە کۆدەکانی فایەربەیس لەناو فایلی main.dart دانراون.\n\n$e';
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E2C), // رەنگی باکگراوندی تاریکی ئەدمین پەنەڵ
+      backgroundColor: const Color(0xFF1E1E2C),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // بازنەیەکی سپی و لۆگۆیەکی شین
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: const Icon(Icons.dashboard_customize, size: 80, color: Color(0xFF0056D2)),
               ),
-              child: const Icon(
-                Icons.dashboard_customize,
-                size: 80,
-                color: Color(0xFF0056D2),
-              ),
-            ),
-            const SizedBox(height: 30),
-            const Text(
-              'ئۆردەرات ئەدمین',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'سیستەمی بەڕێوەبردنی گەیاندن',
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 50),
-            const CircularProgressIndicator(
-              color: Colors.white,
-            ),
-          ],
+              const SizedBox(height: 30),
+              const Text('ئۆردەرات ئەدمین', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              const Text('سیستەمی بەڕێوەبردنی گەیاندن', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              const SizedBox(height: 50),
+              
+              if (_errorMessage.isEmpty)
+                const CircularProgressIndicator(color: Colors.white)
+              else
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red)),
+                  child: Text(_errorMessage, style: const TextStyle(color: Colors.redAccent, fontSize: 14), textAlign: TextAlign.center, textDirection: TextDirection.ltr),
+                ),
+            ],
+          ),
         ),
       ),
     );
