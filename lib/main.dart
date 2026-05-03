@@ -1,14 +1,28 @@
-// Path: lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // لێرەدا گەڕاندمانەوە بۆ شێوازە ئاساییەکەی خۆت بەبێ فایلی firebase_options
-  await Firebase.initializeApp();
+  // لێرەدا کۆنفیگەکانی تۆم داناوە بۆ ئەوەی وێبەکە بێ کێشە کار بکات
+  if (kIsWeb) {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyDnxL-BwDIeYAD-r0K_NOsMm1i1Za_9OEg",
+        authDomain: "ordarat-app.firebaseapp.com",
+        projectId: "ordarat-app",
+        storageBucket: "ordarat-app.firebasestorage.app",
+        messagingSenderId: "734935691543",
+        appId: "1:734935691543:web:bc364b11c214cdad9c0752",
+        measurementId: "G-B2427LRVWN",
+      ),
+    );
+  } else {
+    // بۆ ئەندرۆید و پلاتفۆرمەکانی تر بە شێوازە ئاساییەکە دەستپێدەکات
+    await Firebase.initializeApp();
+  }
   
   runApp(const MyApp());
 }
