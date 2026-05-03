@@ -23,7 +23,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final List<String> _cities = ['هەموو شارەکان', 'دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
   final List<String> _formCities = ['دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
 
-  // لێرەدا لیستەکەمان کرد بە داینامیک بۆ ئەوەی لە فایەربەیسەوە بیخوێنێتەوە
   List<String> _dynamicShifts = ['کاتی ئازاد (بێ شەفت)'];
 
   @override
@@ -32,7 +31,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     _loadDynamicShifts();
   }
 
-  // فەنکشنێک بۆ هێنانی شەفتەکان بە زیندوویی
   void _loadDynamicShifts() {
     FirebaseFirestore.instance.collection('Shifts').snapshots().listen((snapshot) {
       List<String> shifts = ['کاتی ئازاد (بێ شەفت)'];
@@ -41,11 +39,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           shifts.add(doc['name']);
         }
       }
-      if (mounted) {
-        setState(() {
-          _dynamicShifts = shifts;
-        });
-      }
+      if (mounted) setState(() => _dynamicShifts = shifts);
     });
   }
 
@@ -115,7 +109,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     final TextEditingController contractStartCtrl = TextEditingController();
     final TextEditingController contractEndCtrl = TextEditingController();
     
-    // بەکارهێنانی شەفتە داینامیکەکان
     String selectedShift = _dynamicShifts.isNotEmpty ? _dynamicShifts[0] : 'کاتی ئازاد (بێ شەفت)';
     String selectedCity = _formCities[0]; 
 
@@ -186,19 +179,31 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
+  // مێشکی ڕاستەقینەی دروستکردنی ئەکاونت بەبێ کێشە لەسەر وێب
   Future<void> _createNewAccount(String role, String name, String phone, String pass, String shift, String cStart, String cEnd, String city) async {
     setState(() => _isLoading = true);
     try {
       String finalPhone = phone.startsWith('0') ? phone : '0$phone';
-      String finalEmail = "$finalPhone@company.com";
-      FirebaseApp tempApp = await Firebase.initializeApp(name: 'TempApp_${DateTime.now().millisecondsSinceEpoch}', options: Firebase.app().options);
-      UserCredential userCred = await FirebaseAuth.instanceFor(app: tempApp).createUserWithEmailAndPassword(email: finalEmail, password: pass);
+      String finalEmail = "$finalPhone@ordarat.com"; // گۆڕدرا بۆ دۆمەینی فەرمی
+      
+      // بەکارهێنانی options بە فەرمی بۆ ئەوەی لە وێبدا ئێرۆر نەدات
+      FirebaseApp tempApp = await Firebase.initializeApp(
+        name: 'TempApp_${DateTime.now().millisecondsSinceEpoch}', 
+        options: Firebase.app().options, 
+      );
+      
+      UserCredential userCred = await FirebaseAuth.instanceFor(app: tempApp).createUserWithEmailAndPassword(email: finalEmail, password: pass.trim());
       
       Map<String, dynamic> userData = {
-        'name': name.trim(), 'phone': finalPhone, 'plain_password': pass.trim(),
+        'name': name.trim(), 
+        'phone': finalPhone, 
+        'plain_password': pass.trim(),
         'city': city,
-        'is_active': true, 'wallet_balance': 0, 'completed_orders': 0,
-        'role': role == 'Drivers' ? 'driver' : 'restaurant', 'created_at': FieldValue.serverTimestamp(),
+        'is_active': true, 
+        'wallet_balance': 0, 
+        'completed_orders': 0,
+        'role': role == 'Drivers' ? 'driver' : 'restaurant', 
+        'created_at': FieldValue.serverTimestamp(),
       };
       
       if (role == 'Drivers') {
@@ -210,7 +215,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       }
 
       await FirebaseFirestore.instance.collection(role).doc(userCred.user!.uid).set(userData);
-      await tempApp.delete();
+      await tempApp.delete(); // سڕینەوەی ئەپە کاتییەکە بێ کێشە
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی دروست کرا!'), backgroundColor: Colors.green));
     } catch (e) {
@@ -429,6 +435,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   Widget _buildUserList(String collection) {
     return StreamBuilder<QuerySnapshot>(
+      // زۆر گرنگە کە لێرەوە بە شێوەیەکی ڕاستەقینە داتاکان دەخوێنێتەوە بەپێی ئۆردەرەکان
       stream: FirebaseFirestore.instance.collection(collection).orderBy('completed_orders', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
