@@ -7,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart'; // زیادکرا بۆ پەیوەندیکردن
+import 'package:url_launcher/url_launcher.dart';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -19,12 +19,14 @@ class ManageUsersScreen extends StatefulWidget {
 class _ManageUsersScreenState extends State<ManageUsersScreen> {
   String _searchQuery = '';
   String _selectedCityFilter = 'هەموو شارەکان';
+  String _selectedSort = 'نوێترین'; // فلتەری نوێ بۆ ڕیزکردن
   bool _isLoading = false;
   bool _showArchived = false; 
   final Color primaryBlue = const Color(0xFF0056D2);
 
   final List<String> _cities = ['هەموو شارەکان', 'دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
   final List<String> _formCities = ['دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
+  final List<String> _sortOptions = ['نوێترین', 'کۆنترین', 'زۆرترین ئۆردەر'];
 
   List<String> _dynamicShifts = ['کاتی ئازاد (بێ شەفت)'];
 
@@ -55,6 +57,23 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: Colors.indigo)), child: child!),
     );
     if (picked != null) controller.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+  }
+
+  // هەژمارکردنی ماوەی خزمەت (چەندە لەگەڵمانە)
+  String _getServiceDuration(String joinDateStr) {
+    try {
+      DateTime joinDate = DateTime.parse(joinDateStr);
+      Duration diff = DateTime.now().difference(joinDate);
+      int days = diff.inDays;
+      if (days < 30) return '$days ڕۆژ';
+      int months = days ~/ 30;
+      if (months < 12) return '$months مانگ';
+      int years = months ~/ 12;
+      int remMonths = months % 12;
+      return remMonths > 0 ? '$years ساڵ و $remMonths مانگ' : '$years ساڵ';
+    } catch(e) {
+      return 'نەزانراو';
+    }
   }
 
   void _showNotificationDialog(String? token, String userName) {
@@ -109,6 +128,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     final TextEditingController nameCtrl = TextEditingController();
     final TextEditingController phoneCtrl = TextEditingController();
     final TextEditingController passCtrl = TextEditingController();
+    
+    // بەرواری دەستبەکاربوون (بە دیفۆڵت ئەمڕۆیە)
+    final TextEditingController joinDateCtrl = TextEditingController(text: DateFormat('yyyy-MM-dd').format(DateTime.now()));
+    
+    final TextEditingController salaryCtrl = TextEditingController(text: '0'); 
     final TextEditingController contractStartCtrl = TextEditingController();
     final TextEditingController contractEndCtrl = TextEditingController();
     
@@ -145,6 +169,17 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'مۆبایل', prefixIcon: Icon(Icons.phone))),
                       const SizedBox(height: 10),
                       TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: Icon(Icons.lock))),
+                      const SizedBox(height: 10),
+                      
+                      // خانەی بەرواری دەستبەکاربوون
+                      TextField(
+                        controller: joinDateCtrl, readOnly: true, 
+                        onTap: () => _selectDate(context, joinDateCtrl), 
+                        decoration: InputDecoration(
+                          labelText: roleType == 'Drivers' ? 'بەرواری دامەزراندنی شۆفێر' : 'بەرواری پەیوەندی بە کۆمپانیا', 
+                          prefixIcon: const Icon(Icons.history_edu, color: Colors.brown)
+                        )
+                      ),
                       
                       if (roleType == 'Drivers') ...[
                         const SizedBox(height: 15),
@@ -153,6 +188,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                           decoration: const InputDecoration(labelText: 'کاتی کارکردن (شەفت)', prefixIcon: Icon(Icons.access_time)),
                           items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
                           onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: salaryCtrl, 
+                          keyboardType: TextInputType.number, 
+                          decoration: const InputDecoration(labelText: 'مووچەی مانگانە (بە دینار)', prefixIcon: Icon(Icons.payments, color: Colors.purple), hintText: 'ئەگەر مووچەی جێگیری هەیە لێرە بنووسە'),
                         ),
                       ],
 
@@ -189,9 +230,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   onPressed: () async {
                     if (nameCtrl.text.isEmpty || phoneCtrl.text.isEmpty || passCtrl.text.isEmpty) return;
                     Navigator.pop(context);
+                    
+                    double monthlySalary = double.tryParse(salaryCtrl.text.trim()) ?? 0.0;
+
                     await _createNewAccount(
                       role: roleType, name: nameCtrl.text, phone: phoneCtrl.text, pass: passCtrl.text, 
-                      shift: selectedShift, cStart: contractStartCtrl.text, cEnd: contractEndCtrl.text, city: selectedCity,
+                      shift: selectedShift, monthlySalary: monthlySalary, joinDate: joinDateCtrl.text,
+                      cStart: contractStartCtrl.text, cEnd: contractEndCtrl.text, city: selectedCity,
                       profileImg: profileImgCtrl.text, nationalId: nationalIdCtrl.text, license: licenseCtrl.text
                     );
                   },
@@ -207,7 +252,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   Future<void> _createNewAccount({
     required String role, required String name, required String phone, required String pass, 
-    required String shift, required String cStart, required String cEnd, required String city,
+    required String shift, required double monthlySalary, required String joinDate,
+    required String cStart, required String cEnd, required String city,
     required String profileImg, required String nationalId, required String license
   }) async {
     setState(() => _isLoading = true);
@@ -223,6 +269,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'phone': finalPhone, 
         'plain_password': pass.trim(),
         'city': city,
+        'join_date': joinDate, // خەزنکردنی بەرواری دەستبەکاربوون
         'is_active': true,
         'is_archived': false, 
         'wallet_balance': 0, 
@@ -237,6 +284,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       if (role == 'Drivers') {
         userData['is_online'] = false;
         userData['shift'] = shift;
+        userData['monthly_salary'] = monthlySalary; 
       } else if (role == 'Restaurants') {
         userData['contract_start'] = cStart;
         userData['contract_end'] = cEnd;
@@ -258,8 +306,19 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     final TextEditingController nameCtrl = TextEditingController(text: currentData['name']);
     final TextEditingController phoneCtrl = TextEditingController(text: currentData['phone']);
     final TextEditingController passCtrl = TextEditingController(text: currentData['plain_password']);
+    
+    // هێنانی بەرواری دەستبەکاربوون
+    String existingJoinDate = currentData['join_date'] ?? '';
+    if (existingJoinDate.isEmpty && currentData['created_at'] != null) {
+      existingJoinDate = DateFormat('yyyy-MM-dd').format((currentData['created_at'] as Timestamp).toDate());
+    } else if (existingJoinDate.isEmpty) {
+      existingJoinDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    }
+    final TextEditingController joinDateCtrl = TextEditingController(text: existingJoinDate);
+
     final TextEditingController contractStartCtrl = TextEditingController(text: currentData['contract_start'] ?? '');
     final TextEditingController contractEndCtrl = TextEditingController(text: currentData['contract_end'] ?? '');
+    final TextEditingController salaryCtrl = TextEditingController(text: (currentData['monthly_salary'] ?? 0).toString());
 
     String selectedShift = currentData['shift'] ?? 'کاتی ئازاد (بێ شەفت)';
     if (!_dynamicShifts.contains(selectedShift)) selectedShift = _dynamicShifts.isNotEmpty ? _dynamicShifts[0] : 'کاتی ئازاد (بێ شەفت)';
@@ -292,6 +351,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'مۆبایل', prefixIcon: Icon(Icons.phone))),
                     const SizedBox(height: 10),
                     TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی نوێ', prefixIcon: Icon(Icons.lock_reset))),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: joinDateCtrl, readOnly: true, 
+                      onTap: () => _selectDate(context, joinDateCtrl), 
+                      decoration: const InputDecoration(labelText: 'بەرواری دەستبەکاربوون (دامەزراندن)', prefixIcon: Icon(Icons.history_edu, color: Colors.brown))
+                    ),
                     
                     if (collection == 'Drivers') ...[
                       const SizedBox(height: 15),
@@ -300,6 +365,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                         decoration: const InputDecoration(labelText: 'گۆڕینی شەفت', prefixIcon: Icon(Icons.access_time)),
                         items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: salaryCtrl, 
+                        keyboardType: TextInputType.number, 
+                        decoration: const InputDecoration(labelText: 'مووچەی مانگانە (بە دینار)', prefixIcon: Icon(Icons.payments, color: Colors.purple)),
                       ),
                     ],
 
@@ -326,9 +397,16 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       'phone': phoneCtrl.text.trim(),
                       'plain_password': passCtrl.text.trim(),
                       'city': selectedCity,
+                      'join_date': joinDateCtrl.text,
                     };
-                    if (collection == 'Drivers') updates['shift'] = selectedShift;
-                    else if (collection == 'Restaurants') { updates['contract_start'] = contractStartCtrl.text; updates['contract_end'] = contractEndCtrl.text; }
+                    if (collection == 'Drivers') {
+                      updates['shift'] = selectedShift;
+                      updates['monthly_salary'] = double.tryParse(salaryCtrl.text.trim()) ?? 0.0;
+                    }
+                    else if (collection == 'Restaurants') { 
+                      updates['contract_start'] = contractStartCtrl.text; 
+                      updates['contract_end'] = contractEndCtrl.text; 
+                    }
 
                     await FirebaseFirestore.instance.collection(collection).doc(uid).update(updates);
                     if (!context.mounted) return;
@@ -565,7 +643,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // --- فەنکشنی پەیوەندیکردن (Call) ---
   Future<void> _makePhoneCall(String phoneNumber) async {
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     if (await canLaunchUrl(launchUri)) {
@@ -583,17 +660,20 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     bool isArchived = data['is_archived'] ?? false;
     bool isOnline = collection == 'Drivers' ? (data['is_online'] ?? false) : false;
     double walletBalance = (data['wallet_balance'] ?? 0).toDouble();
+    double monthlySalary = (data['monthly_salary'] ?? 0).toDouble();
     
+    // زانینی کاتی دەستبەکاربوون و ماوەکەی
+    String joinDate = data['join_date'] ?? '';
+    if (joinDate.isEmpty && data['created_at'] != null) {
+      joinDate = DateFormat('yyyy-MM-dd').format((data['created_at'] as Timestamp).toDate());
+    }
+    String serviceDuration = joinDate.isNotEmpty ? _getServiceDuration(joinDate) : 'نەزانراو';
+
     bool isContractExpired = false;
     if (collection == 'Restaurants' && data['contract_end'] != null && data['contract_end'].toString().isNotEmpty) {
       try { if (DateTime.parse(data['contract_end']).isBefore(DateTime.now())) isContractExpired = true; } catch (e) {}
     }
 
-    String createdAt = 'نەزانراو';
-    if (data['created_at'] != null) {
-      try { createdAt = DateFormat('yyyy-MM-dd HH:mm').format((data['created_at'] as Timestamp).toDate()); } catch (e) {}
-    }
-    
     String banInfo = '';
     if (!isActive && data['ban_until'] != null) {
       DateTime banUntil = (data['ban_until'] as Timestamp).toDate();
@@ -658,7 +738,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     if (banInfo.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(banInfo, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
                     const SizedBox(height: 15),
                     
-                    // --- دوگمەی تەلەفۆنکردن (نوێ) ---
                     if (data['phone'] != null && data['phone'].toString().isNotEmpty)
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
@@ -698,9 +777,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                     children: [
                                       Row(
                                         children: [
-                                          Expanded(child: _buildStatCard('باڵانسی جزدان', '${walletBalance.toInt()} IQD', Icons.account_balance_wallet, Colors.green)),
-                                          const SizedBox(width: 15),
-                                          Expanded(child: _buildStatCard('کۆی ئۆردەرەکان', '${data['completed_orders'] ?? 0}', Icons.shopping_bag, themeColor)),
+                                          Expanded(child: _buildStatCard('باڵانس', '${walletBalance.toInt()} IQD', Icons.account_balance_wallet, Colors.green)),
+                                          const SizedBox(width: 10),
+                                          Expanded(child: _buildStatCard('ئۆردەرەکان', '${data['completed_orders'] ?? 0}', Icons.shopping_bag, themeColor)),
+                                          if (collection == 'Drivers') ...[
+                                            const SizedBox(width: 10),
+                                            Expanded(child: _buildStatCard('مووچەی جێگیر', '${monthlySalary.toInt()} IQD', Icons.payments, Colors.purple)),
+                                          ]
                                         ],
                                       ),
                                       const SizedBox(height: 20),
@@ -804,7 +887,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                 ),
                               ),
 
-                              // تابی 4: زانیاری کەسی
+                              // تابی 4: زانیاری کەسی و دەستبەکاربوون
                               ListView(
                                 padding: const EdgeInsets.all(20),
                                 children: [
@@ -812,7 +895,24 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                   const Divider(),
                                   ListTile(leading: const Icon(Icons.email), title: const Text('ئیمەیڵی لۆگین'), subtitle: Text('${data['phone']}@ordarat.com', style: const TextStyle(fontSize: 16))),
                                   const Divider(),
-                                  ListTile(leading: const Icon(Icons.calendar_today), title: const Text('بەرواری دروستکردنی هەژمار'), subtitle: Text(createdAt, style: const TextStyle(fontSize: 16))),
+                                  Container(
+                                    padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.brown[50], borderRadius: BorderRadius.circular(10)),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.history_edu, color: Colors.brown, size: 30),
+                                        const SizedBox(width: 15),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(collection == 'Drivers' ? 'بەرواری دامەزراندن' : 'بەرواری پەیوەندی بە کۆمپانیا', style: const TextStyle(color: Colors.brown, fontWeight: FontWeight.bold)),
+                                            Text(joinDate.isNotEmpty ? joinDate : 'دیاری نەکراوە', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                            const SizedBox(height: 5),
+                                            Text('ماوەی خزمەت: $serviceDuration', style: const TextStyle(color: Colors.brown, fontSize: 12, fontWeight: FontWeight.bold)),
+                                          ],
+                                        )
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -860,13 +960,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         children: [
           Icon(icon, color: color, size: 30),
           const SizedBox(height: 10),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 11)),
         ],
       ),
     );
   }
 
+  // --- مێشکی ڕیزکردنی زیرەک ---
   Widget _buildUserList(String collection) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection(collection).snapshots(),
@@ -874,15 +975,34 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
         var allDocs = snapshot.data!.docs.toList();
+        
+        // جێبەجێکردنی فلتەری ڕیزکردن (کۆنترین، نوێترین، زۆرترین ئۆردەر)
         allDocs.sort((a, b) {
           var dataA = a.data() as Map<String, dynamic>;
           var dataB = b.data() as Map<String, dynamic>;
-          Timestamp? tA = dataA['created_at'] as Timestamp?;
-          Timestamp? tB = dataB['created_at'] as Timestamp?;
-          if (tA == null && tB == null) return 0;
-          if (tA == null) return 1;
-          if (tB == null) return -1;
-          return tB.compareTo(tA);
+          
+          if (_selectedSort == 'زۆرترین ئۆردەر') {
+            int ordersA = dataA['completed_orders'] ?? 0;
+            int ordersB = dataB['completed_orders'] ?? 0;
+            return ordersB.compareTo(ordersA); // ڕیزکردن لە زۆرەوە بۆ کەم
+          } else {
+            String dateA = dataA['join_date'] ?? '';
+            String dateB = dataB['join_date'] ?? '';
+            
+            // ئەگەر بەرواری دەستبەکاربوون نەبوو، کاتی دروستبوونی ئەکاونت بەکاربهێنە
+            if (dateA.isEmpty && dataA['created_at'] != null) {
+              dateA = DateFormat('yyyy-MM-dd').format((dataA['created_at'] as Timestamp).toDate());
+            }
+            if (dateB.isEmpty && dataB['created_at'] != null) {
+              dateB = DateFormat('yyyy-MM-dd').format((dataB['created_at'] as Timestamp).toDate());
+            }
+
+            if (_selectedSort == 'کۆنترین') {
+              return dateA.compareTo(dateB); // ڕیزکردن لە کۆنەوە بۆ نوێ
+            } else {
+              return dateB.compareTo(dateA); // ڕیزکردن لە نوێەوە بۆ کۆن (دیفۆڵت)
+            }
+          }
         });
 
         var docs = allDocs.where((doc) {
@@ -913,13 +1033,19 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             String shift = collection == 'Drivers' ? (data['shift'] ?? 'کاتی ئازاد (بێ شەفت)') : '';
             String city = data['city'] ?? 'دیاری نەکراوە';
             
+            // هێنانی بەرواری دەستبەکاربوون بۆ لیستی دەرەوە
+            String joinDate = data['join_date'] ?? '';
+            if (joinDate.isEmpty && data['created_at'] != null) {
+              joinDate = DateFormat('yyyy-MM-dd').format((data['created_at'] as Timestamp).toDate());
+            }
+            
             bool isContractExpired = false;
             if (collection == 'Restaurants' && data['contract_end'] != null && data['contract_end'].toString().isNotEmpty) {
               try { if (DateTime.parse(data['contract_end']).isBefore(DateTime.now())) isContractExpired = true; } catch (e) {}
             }
             
             Widget? crown;
-            if (!_showArchived) {
+            if (!_showArchived && _selectedSort == 'زۆرترین ئۆردەر') {
                if (index == 0 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.amber, size: 30); 
                else if (index == 1 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.grey, size: 30); 
                else if (index == 2 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.brown, size: 30); 
@@ -953,6 +1079,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   children: [
                     const SizedBox(height: 5),
                     Text('${data['phone']} | باڵانس: ${data['wallet_balance'] ?? 0} IQD\nئۆردەر: ${data['completed_orders'] ?? 0}'),
+                    const SizedBox(height: 2),
+                    Text('لەگەڵمانە لە: ${joinDate.isNotEmpty ? joinDate : 'نەزانراو'}', style: const TextStyle(color: Colors.brown, fontSize: 11, fontWeight: FontWeight.bold)),
+                    
                     if (collection == 'Drivers') Text(shift, style: const TextStyle(color: Colors.indigo, fontSize: 12, fontWeight: FontWeight.bold)),
                     if (collection == 'Restaurants' && data['contract_end'] != null)
                       Text(isContractExpired ? 'گرێبەست بەسەرچووە ⚠️' : 'گرێبەست کارایە ✅', style: TextStyle(color: isContractExpired ? Colors.red : Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -984,7 +1113,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     decoration: InputDecoration(hintText: 'گەڕان بۆ ناو...', prefixIcon: const Icon(Icons.search, color: Colors.indigo), filled: true, fillColor: Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none)),
                   ),
                 ),
-                const SizedBox(width: 15),
+                const SizedBox(width: 10),
                 Expanded(
                   flex: 1,
                   child: DropdownButtonFormField<String>(
@@ -994,12 +1123,23 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     onChanged: (newVal) => setState(() => _selectedCityFilter = newVal!),
                   ),
                 ),
-                const SizedBox(width: 15),
+                const SizedBox(width: 10),
+                // فلتەری نوێ بۆ ڕیزکردن (کۆنترین، نوێترین)
+                Expanded(
+                  flex: 1,
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedSort,
+                    decoration: InputDecoration(filled: true, fillColor: Colors.amber[50], border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none)),
+                    items: _sortOptions.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber, fontSize: 12)))).toList(),
+                    onChanged: (newVal) => setState(() => _selectedSort = newVal!),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), foregroundColor: _showArchived ? Colors.white : Colors.indigo, backgroundColor: _showArchived ? Colors.indigo : Colors.white),
                   onPressed: () => setState(() => _showArchived = !_showArchived),
                   icon: Icon(_showArchived ? Icons.folder_special : Icons.archive),
-                  label: Text(_showArchived ? 'گەڕانەوە بۆ لیستی چالاک' : 'بینینی ئەرشیف'),
+                  label: Text(_showArchived ? 'گەڕانەوە' : 'ئەرشیف'),
                 ),
               ],
             ),
