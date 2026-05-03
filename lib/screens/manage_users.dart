@@ -19,6 +19,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   String _searchQuery = '';
   String _selectedCityFilter = 'هەموو شارەکان';
   bool _isLoading = false;
+  bool _showArchived = false; // بۆ پیشاندانی ئەکاونتە ئەرشیفکراوەکان
   final Color primaryBlue = const Color(0xFF0056D2);
 
   final List<String> _cities = ['هەموو شارەکان', 'دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
@@ -71,9 +72,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'سەردێڕ (نموونە: ئاگاداری)', prefixIcon: Icon(Icons.title))),
+            TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'سەردێڕ', prefixIcon: Icon(Icons.title))),
             const SizedBox(height: 10),
-            TextField(controller: bodyCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'ناوەڕۆکی نامە...', border: OutlineInputBorder())),
+            TextField(controller: bodyCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'ناوەڕۆک...', border: OutlineInputBorder())),
           ],
         ),
         actions: [
@@ -127,15 +128,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   children: [
                     DropdownButtonFormField<String>(
                       value: selectedCity,
-                      decoration: const InputDecoration(labelText: 'شار (پارێزگا)', prefixIcon: Icon(Icons.location_city, color: Colors.blue)),
+                      decoration: const InputDecoration(labelText: 'شار', prefixIcon: Icon(Icons.location_city, color: Colors.blue)),
                       items: _formCities.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
                       onChanged: (newVal) => setStateDialog(() => selectedCity = newVal!),
                     ),
                     const SizedBox(height: 15),
-                    
                     TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناوی تەواو', prefixIcon: Icon(Icons.person))),
                     const SizedBox(height: 10),
-                    TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'مۆبایل (بێ سفر)', prefixIcon: Icon(Icons.phone))),
+                    TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'مۆبایل', prefixIcon: Icon(Icons.phone))),
                     const SizedBox(height: 10),
                     TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: Icon(Icons.lock))),
                     
@@ -143,7 +143,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       const SizedBox(height: 15),
                       DropdownButtonFormField<String>(
                         value: selectedShift,
-                        decoration: const InputDecoration(labelText: 'کاتی کارکردن (شەفت)', prefixIcon: Icon(Icons.access_time)),
+                        decoration: const InputDecoration(labelText: 'کاتی کارکردن', prefixIcon: Icon(Icons.access_time)),
                         items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
                       ),
@@ -152,11 +152,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     if (roleType == 'Restaurants') ...[
                       const SizedBox(height: 15),
                       const Divider(),
-                      const Text('زانیارییەکانی گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                      const Text('زانیاری گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                       const SizedBox(height: 10),
                       TextField(controller: contractStartCtrl, readOnly: true, onTap: () => _selectDate(context, contractStartCtrl), decoration: const InputDecoration(labelText: 'بەرواری دەستپێك', prefixIcon: Icon(Icons.calendar_today, color: Colors.green))),
                       const SizedBox(height: 10),
-                      TextField(controller: contractEndCtrl, readOnly: true, onTap: () => _selectDate(context, contractEndCtrl), decoration: const InputDecoration(labelText: 'بەرواری کۆتایی هاتن', prefixIcon: Icon(Icons.event_busy, color: Colors.red))),
+                      TextField(controller: contractEndCtrl, readOnly: true, onTap: () => _selectDate(context, contractEndCtrl), decoration: const InputDecoration(labelText: 'بەرواری کۆتایی', prefixIcon: Icon(Icons.event_busy, color: Colors.red))),
                     ]
                   ],
                 ),
@@ -186,11 +186,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       String finalPhone = phone.startsWith('0') ? phone : '0$phone';
       String finalEmail = "$finalPhone@ordarat.com"; 
       
-      FirebaseApp tempApp = await Firebase.initializeApp(
-        name: 'TempApp_${DateTime.now().millisecondsSinceEpoch}', 
-        options: Firebase.app().options, 
-      );
-      
+      FirebaseApp tempApp = await Firebase.initializeApp(name: 'TempApp_${DateTime.now().millisecondsSinceEpoch}', options: Firebase.app().options);
       UserCredential userCred = await FirebaseAuth.instanceFor(app: tempApp).createUserWithEmailAndPassword(email: finalEmail, password: pass.trim());
       
       Map<String, dynamic> userData = {
@@ -198,11 +194,15 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'phone': finalPhone, 
         'plain_password': pass.trim(),
         'city': city,
-        'is_active': true, 
+        'is_active': true,
+        'is_archived': false, // ئەکاونتی نوێ بە دیفۆڵت لە ئەرشیف نییە
         'wallet_balance': 0, 
         'completed_orders': 0,
         'role': role == 'Drivers' ? 'driver' : 'restaurant', 
         'created_at': FieldValue.serverTimestamp(),
+        'profile_image': '',
+        'national_id_image': '',
+        'driving_license_image': '',
       };
       
       if (role == 'Drivers') {
@@ -315,33 +315,235 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  void _deleteUser(String uid, String collection, String name) {
+  // --- سزای دارایی ---
+  void _showPenaltyDialog(String uid, String collection, String name, double currentBalance) {
+    final TextEditingController amountCtrl = TextEditingController();
+    final TextEditingController reasonCtrl = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('سڕینەوەی یەکجاری!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-        content: Text('ئایا دڵنیایت دەتەوێت ($name) بە یەکجاری بسڕیتەوە؟ ئەم کارە ناگەڕێتەوە.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('سزای دارایی بۆ: $name', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
+              child: Text('باڵانسی ئێستا: ${currentBalance.toInt()} دینار', style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 15),
+            TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'بڕی سزا (بە دینار)', prefixIcon: Icon(Icons.money_off, color: Colors.red))),
+            const SizedBox(height: 10),
+            TextField(controller: reasonCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'هۆکاری سزا...', border: OutlineInputBorder())),
+          ],
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('نەخێر')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
-              Navigator.pop(context); Navigator.pop(context); 
-              await FirebaseFirestore.instance.collection(collection).doc(uid).delete();
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ئەکاونتەکە سڕایەوە.'), backgroundColor: Colors.red));
+              if (amountCtrl.text.isEmpty || reasonCtrl.text.isEmpty) return;
+              double penaltyAmount = double.tryParse(amountCtrl.text) ?? 0;
+              if (penaltyAmount <= 0) return;
+
+              Navigator.pop(context);
+              await FirebaseFirestore.instance.collection(collection).doc(uid).update({
+                'wallet_balance': FieldValue.increment(-penaltyAmount)
+              });
+              
+              await FirebaseFirestore.instance.collection('Penalties').add({
+                'user_id': uid, 'user_name': name, 'role': collection,
+                'amount': penaltyAmount, 'reason': reasonCtrl.text, 'date': FieldValue.serverTimestamp(),
+              });
+
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سزای دارایی جێبەجێ کرا!'), backgroundColor: Colors.red));
             },
-            child: const Text('بەڵێ، بیسڕەوە'),
+            child: const Text('سەپاندنی سزا'),
           ),
         ],
       ),
     );
   }
 
-  // مێشکی پڕۆفایلە زەبەلاحە نوێیەکە (360-Degree Profile)
+  // --- سیستەمی سڕکردنی کاتی (Temp Ban) ---
+  void _showBanOptionsDialog(String uid, String collection, String name, bool isCurrentlyActive) {
+    if (!isCurrentlyActive) {
+      // ئەگەر پێشتر باند کرابوو، تەنها بیکەرەوە
+      FirebaseFirestore.instance.collection(collection).doc(uid).update({
+        'is_active': true,
+        'ban_until': FieldValue.delete(),
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('هەژمارەکە چالاک کرایەوە!'), backgroundColor: Colors.green));
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('سڕکردنی هەژمار: $name', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('بۆ چەند کاتێک دەتەوێت ئەم هەژمارە ڕابگریت؟', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 15),
+            ListTile(
+              leading: const Icon(Icons.timer), title: const Text('٢٤ کاتژمێر'),
+              onTap: () => _applyBan(context, uid, collection, const Duration(hours: 24)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.date_range), title: const Text('٣ ڕۆژ'),
+              onTap: () => _applyBan(context, uid, collection, const Duration(days: 3)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.calendar_month), title: const Text('١ هەفتە'),
+              onTap: () => _applyBan(context, uid, collection, const Duration(days: 7)),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.red), 
+              title: const Text('هەمیشەیی (باندی تەواو)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              onTap: () => _applyBan(context, uid, collection, null), // null واتە هەمیشەیی
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyBan(BuildContext dialogContext, String uid, String collection, Duration? duration) async {
+    Navigator.pop(dialogContext);
+    Map<String, dynamic> updates = {'is_active': false};
+    
+    if (duration != null) {
+      DateTime unbanDate = DateTime.now().add(duration);
+      updates['ban_until'] = unbanDate;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('هەژمارەکە سڕکرا تاوەکو: ${DateFormat('yyyy-MM-dd HH:mm').format(unbanDate)}'), backgroundColor: Colors.orange));
+    } else {
+      updates['ban_until'] = FieldValue.delete();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('هەژمارەکە بە یەکجاری باند کرا!'), backgroundColor: Colors.red));
+    }
+
+    await FirebaseFirestore.instance.collection(collection).doc(uid).update(updates);
+  }
+
+  // --- سیستەمی ئەرشیفکردن ---
+  void _archiveUser(String uid, String collection, String name, bool isCurrentlyArchived) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isCurrentlyArchived ? 'هێنانەدەرەوە لە ئەرشیف' : 'ئەرشیفکردنی ئەکاونت', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
+        content: Text(isCurrentlyArchived 
+          ? 'ئایا دەتەوێت ($name) بگەڕێنیتەوە بۆ لیستی سەرەکی؟' 
+          : 'ئایا دەتەوێت ($name) بخەیتە ئەرشیفەوە؟ بەم کارە لە لیستی سەرەکی نامێنێت بەڵام داتاکانی نافەوتێت و نەسڕێتەوە.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('نەخێر')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: isCurrentlyArchived ? Colors.green : Colors.indigo, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(context); Navigator.pop(context); // داخستنی پڕۆفایلەکەش
+              await FirebaseFirestore.instance.collection(collection).doc(uid).update({'is_archived': !isCurrentlyArchived});
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isCurrentlyArchived ? 'گەڕێنرایەوە لیستی سەرەکی.' : 'خرایە ئەرشیفەوە.'), backgroundColor: Colors.blue));
+            },
+            child: Text(isCurrentlyArchived ? 'هێنانەدەرەوە' : 'بەڵێ، ئەرشیفی بکە'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUpdateDocumentsDialog(String uid, String collection, Map<String, dynamic> currentData) {
+    final TextEditingController profileCtrl = TextEditingController(text: currentData['profile_image'] ?? '');
+    final TextEditingController idCtrl = TextEditingController(text: currentData['national_id_image'] ?? '');
+    final TextEditingController licenseCtrl = TextEditingController(text: currentData['driving_license_image'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('نوێکردنەوەی بەڵگەنامەکان و وێنە', style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('تکایە لینکی وێنەکان (URL) لێرە دابنێ.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                const SizedBox(height: 15),
+                TextField(controller: profileCtrl, decoration: const InputDecoration(labelText: 'لینکی وێنەی پڕۆفایل', prefixIcon: Icon(Icons.account_circle))),
+                const SizedBox(height: 10),
+                if (collection == 'Drivers') ...[
+                  TextField(controller: idCtrl, decoration: const InputDecoration(labelText: 'لینکی کارتی نیشتیمانی', prefixIcon: Icon(Icons.badge))),
+                  const SizedBox(height: 10),
+                  TextField(controller: licenseCtrl, decoration: const InputDecoration(labelText: 'لینکی مۆڵەتی شۆفێری', prefixIcon: Icon(Icons.drive_eta))),
+                ]
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(context);
+              Map<String, dynamic> updates = {'profile_image': profileCtrl.text.trim()};
+              if (collection == 'Drivers') {
+                updates['national_id_image'] = idCtrl.text.trim();
+                updates['driving_license_image'] = licenseCtrl.text.trim();
+              }
+              await FirebaseFirestore.instance.collection(collection).doc(uid).update(updates);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بەڵگەنامەکان نوێکرانەوە!'), backgroundColor: Colors.green));
+            },
+            child: const Text('سەیڤکردن'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog(String uid, String collection, String phone) {
+    final TextEditingController passCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('گۆڕینی پاسۆرد', style: TextStyle(color: Colors.red)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('تێبینی: گۆڕینی پاسۆرد لێرەوە وا دەکات کاتێک بەکارهێنەر لۆگین دەکات، بەم پاسۆردە نوێیە بچێتە ژوورەوە.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 15),
+            TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'پاسۆردی نوێ بنووسە', border: OutlineInputBorder())),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              if (passCtrl.text.isEmpty) return;
+              Navigator.pop(context);
+              await FirebaseFirestore.instance.collection(collection).doc(uid).update({'plain_password': passCtrl.text.trim()});
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('پاسۆردەکە نوێکرایەوە بە سەرکەوتوویی!'), backgroundColor: Colors.green));
+            },
+            child: const Text('گۆڕین'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- پڕۆفایلی زەبەلاح (مۆدێرن) ---
   void _showUserProfile(String uid, String collection, Map<String, dynamic> data) {
     bool isActive = data['is_active'] ?? true;
+    bool isArchived = data['is_archived'] ?? false;
     bool isOnline = collection == 'Drivers' ? (data['is_online'] ?? false) : false;
+    double walletBalance = (data['wallet_balance'] ?? 0).toDouble();
     
     bool isContractExpired = false;
     if (collection == 'Restaurants' && data['contract_end'] != null && data['contract_end'].toString().isNotEmpty) {
@@ -352,7 +554,16 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     if (data['created_at'] != null) {
       try { createdAt = DateFormat('yyyy-MM-dd HH:mm').format((data['created_at'] as Timestamp).toDate()); } catch (e) {}
     }
+    
+    String banInfo = '';
+    if (!isActive && data['ban_until'] != null) {
+      DateTime banUntil = (data['ban_until'] as Timestamp).toDate();
+      if (banUntil.isAfter(DateTime.now())) {
+        banInfo = 'باندکراوە تا: ${DateFormat('yyyy-MM-dd HH:mm').format(banUntil)}';
+      }
+    }
 
+    String profileImg = data['profile_image'] ?? '';
     Color themeColor = collection == 'Drivers' ? Colors.blue : Colors.orange;
 
     showDialog(
@@ -361,24 +572,20 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
-          width: 600,
-          height: 700,
+          width: 750, height: 750,
           child: Column(
             children: [
-              // بەشی سەرەوە (Header)
               Container(
-                height: 120,
-                width: double.infinity,
-                decoration: BoxDecoration(gradient: LinearGradient(colors: [themeColor.withOpacity(0.8), themeColor])),
+                height: 120, width: double.infinity,
+                decoration: BoxDecoration(gradient: LinearGradient(colors: [isArchived ? Colors.grey : themeColor.withOpacity(0.8), isArchived ? Colors.grey[700]! : themeColor])),
                 child: Stack(
                   children: [
                     Positioned(top: 10, right: 10, child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))),
-                    Positioned(top: 10, left: 10, child: IconButton(icon: const Icon(Icons.edit, color: Colors.white), tooltip: 'دەستکاری', onPressed: () => _showEditUserDialog(uid, collection, data))),
+                    if (isArchived) Positioned(top: 15, left: 15, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)), child: const Text('لە ئەرشیفدایە', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
                   ],
                 ),
               ),
               
-              // وێنە و ناوی پڕۆفایل
               Transform.translate(
                 offset: const Offset(0, -50),
                 child: Column(
@@ -386,20 +593,20 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     Container(
                       width: 100, height: 100,
                       decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
-                      child: CircleAvatar(backgroundColor: themeColor.withOpacity(0.1), child: Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 50, color: themeColor)),
+                      child: profileImg.isNotEmpty 
+                        ? ClipOval(child: Image.network(profileImg, fit: BoxFit.cover, errorBuilder: (c,e,s) => Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 50, color: themeColor)))
+                        : CircleAvatar(backgroundColor: themeColor.withOpacity(0.1), child: Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 50, color: themeColor)),
                     ),
                     const SizedBox(height: 10),
                     Text(data['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
+                        Icon(Icons.location_on, size: 16, color: Colors.grey[600]), const SizedBox(width: 4),
                         Text(data['city'] ?? 'دیاری نەکراوە', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    // باجەکان (Badges)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -409,71 +616,110 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                         if (collection == 'Restaurants') _buildBadge(isContractExpired ? 'گرێبەست بەسەرچووە' : 'گرێبەست کارایە', isContractExpired ? Colors.red : Colors.green),
                       ],
                     ),
+                    if (banInfo.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(banInfo, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
                   ],
                 ),
               ),
               
-              // تابەکان بۆ داتای گشتگیر
               Expanded(
                 child: Transform.translate(
                   offset: const Offset(0, -30),
                   child: DefaultTabController(
-                    length: 3,
+                    length: 4, 
                     child: Column(
                       children: [
                         TabBar(
-                          labelColor: themeColor, unselectedLabelColor: Colors.grey, indicatorColor: themeColor,
-                          tabs: const [Tab(text: 'دارایی و کار'), Tab(text: 'زانیاری کەسی'), Tab(text: 'سکیورێتی')],
+                          labelColor: themeColor, unselectedLabelColor: Colors.grey, indicatorColor: themeColor, isScrollable: true,
+                          tabs: const [Tab(text: 'دارایی و کار'), Tab(text: 'بەڵگەنامەکان'), Tab(text: 'سکیورێتی'), Tab(text: 'زانیاری کەسی')],
                         ),
                         Expanded(
                           child: TabBarView(
                             children: [
-                              // تابی دارایی و کار
+                              // تابی 1: دارایی و کار 
                               Padding(
                                 padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(child: _buildStatCard('باڵانسی جزدان', '${data['wallet_balance'] ?? 0} IQD', Icons.account_balance_wallet, Colors.green)),
-                                        const SizedBox(width: 15),
-                                        Expanded(child: _buildStatCard('کۆی ئۆردەرەکان', '${data['completed_orders'] ?? 0}', Icons.shopping_bag, themeColor)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 20),
-                                    if (collection == 'Drivers')
-                                      ListTile(tileColor: Colors.indigo[50], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), leading: const Icon(Icons.access_time, color: Colors.indigo), title: const Text('شەفتی کارکردن', style: TextStyle(fontWeight: FontWeight.bold)), trailing: Text(data['shift'] ?? 'بێ شەفت', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))),
-                                    if (collection == 'Restaurants')
-                                      Container(
-                                        padding: const EdgeInsets.all(15),
-                                        decoration: BoxDecoration(color: Colors.orange[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange[200]!)),
-                                        child: Column(
-                                          children: [
-                                            const Row(children: [Icon(Icons.handshake, color: Colors.orange), SizedBox(width: 10), Text('زانیاری گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))]),
-                                            const Divider(),
-                                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('دەستپێک:'), Text(data['contract_start'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold))]),
-                                            const SizedBox(height: 5),
-                                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('کۆتایی:'), Text(data['contract_end'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold))]),
-                                          ],
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(child: _buildStatCard('باڵانسی جزدان', '${walletBalance.toInt()} IQD', Icons.account_balance_wallet, Colors.green)),
+                                          const SizedBox(width: 15),
+                                          Expanded(child: _buildStatCard('کۆی ئۆردەرەکان', '${data['completed_orders'] ?? 0}', Icons.shopping_bag, themeColor)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      
+                                      SizedBox(
+                                        width: double.infinity, height: 45,
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50], foregroundColor: Colors.red, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: Colors.red))),
+                                          onPressed: () => _showPenaltyDialog(uid, collection, data['name'], walletBalance),
+                                          icon: const Icon(Icons.money_off), label: const Text('سەپاندنی سزای دارایی', style: TextStyle(fontWeight: FontWeight.bold)),
                                         ),
                                       ),
-                                  ],
+                                      const SizedBox(height: 20),
+
+                                      if (collection == 'Drivers')
+                                        ListTile(tileColor: Colors.indigo[50], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), leading: const Icon(Icons.access_time, color: Colors.indigo), title: const Text('شەفتی کارکردن', style: TextStyle(fontWeight: FontWeight.bold)), trailing: Text(data['shift'] ?? 'بێ شەفت', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))),
+                                      
+                                      if (collection == 'Restaurants') ...[
+                                        Container(
+                                          padding: const EdgeInsets.all(15),
+                                          decoration: BoxDecoration(color: Colors.orange[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange[200]!)),
+                                          child: Column(
+                                            children: [
+                                              const Row(children: [Icon(Icons.handshake, color: Colors.orange), SizedBox(width: 10), Text('زانیاری گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))]),
+                                              const Divider(),
+                                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('دەستپێک:'), Text(data['contract_start'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold))]),
+                                              const SizedBox(height: 5),
+                                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('کۆتایی:'), Text(data['contract_end'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold))]),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        SizedBox(
+                                          width: double.infinity, height: 40,
+                                          child: OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(foregroundColor: Colors.green, side: const BorderSide(color: Colors.green)),
+                                            onPressed: () { Navigator.pop(context); _showEditUserDialog(uid, collection, data); },
+                                            icon: const Icon(Icons.autorenew), label: const Text('نوێکردنەوەی گرێبەست'),
+                                          ),
+                                        )
+                                      ],
+                                    ],
+                                  ),
                                 ),
                               ),
                               
-                              // تابی زانیاری کەسی
-                              ListView(
+                              // تابی 2: بەڵگەنامە و وێنەکان
+                              Padding(
                                 padding: const EdgeInsets.all(20),
-                                children: [
-                                  ListTile(leading: const Icon(Icons.phone), title: const Text('ژمارە مۆبایل'), subtitle: Text(data['phone'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-                                  const Divider(),
-                                  ListTile(leading: const Icon(Icons.email), title: const Text('ئیمەیڵی لۆگین'), subtitle: Text('${data['phone']}@ordarat.com', style: const TextStyle(fontSize: 16))),
-                                  const Divider(),
-                                  ListTile(leading: const Icon(Icons.calendar_today), title: const Text('بەرواری دروستکردنی هەژمار'), subtitle: Text(createdAt, style: const TextStyle(fontSize: 16))),
-                                ],
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: () => _showUpdateDocumentsDialog(uid, collection, data), icon: const Icon(Icons.upload_file), label: const Text('دانان یان گۆڕینی لینکی بەڵگەنامەکان'))),
+                                      const SizedBox(height: 20),
+                                      if (collection == 'Drivers') ...[
+                                        const Text('کارتی نیشتیمانی:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 5),
+                                        _buildDocumentPreviewCard(data['national_id_image']),
+                                        const SizedBox(height: 15),
+                                        const Text('مۆڵەتی شۆفێری:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 5),
+                                        _buildDocumentPreviewCard(data['driving_license_image']),
+                                      ] else ...[
+                                        const Text('لۆگۆ / وێنەی خوارنگەهـ:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 5),
+                                        _buildDocumentPreviewCard(data['profile_image']),
+                                      ]
+                                    ],
+                                  ),
+                                ),
                               ),
 
-                              // تابی سکیورێتی و کردارەکان
+                              // تابی 3: سکیورێتی
                               Padding(
                                 padding: const EdgeInsets.all(20),
                                 child: Column(
@@ -483,19 +729,35 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('پاسۆردی ئەکاونت', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)), Text('تەنها بۆ بەڕێوەبەر دەردەکەوێت', style: TextStyle(fontSize: 12, color: Colors.red))]),
+                                          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('پاسۆردی ئێستا', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red))]),
                                           Text(data['plain_password'] ?? 'نەزانراوە', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(height: 20),
-                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { Navigator.pop(context); _showNotificationDialog(data['fcm_token'], data['name'] ?? ''); }, icon: const Icon(Icons.notifications_active), label: const Text('ناردنی نۆتیفیکەیشن بۆ مۆبایلەکەی'))),
+                                    const SizedBox(height: 10),
+                                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _showChangePasswordDialog(uid, collection, data['phone']), icon: const Icon(Icons.lock_reset, color: Colors.red), label: const Text('پێدانی پاسۆردی نوێ', style: TextStyle(color: Colors.red)))),
+                                    const Divider(height: 30),
+                                    
+                                    // دوگمەی سڕکردن یان کردنەوە
+                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () => _showBanOptionsDialog(uid, collection, data['name'], isActive), icon: Icon(isActive ? Icons.block : Icons.check_circle), label: Text(isActive ? 'سڕکردنی هەژمار (Temp Ban)' : 'لابردنی باند (چالاککردنەوە)', style: const TextStyle(fontSize: 16)))),
                                     const SizedBox(height: 15),
-                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () async { await FirebaseFirestore.instance.collection(collection).doc(uid).update({'is_active': !isActive}); if (!context.mounted) return; Navigator.pop(context); }, icon: Icon(isActive ? Icons.block : Icons.check_circle), label: Text(isActive ? 'راگرتنی هەژمار (باندکردن)' : 'چالاککردنەوەی هەژمار', style: const TextStyle(fontSize: 16)))),
-                                    const SizedBox(height: 15),
-                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { Navigator.pop(context); _deleteUser(uid, collection, data['name']); }, icon: const Icon(Icons.delete_forever), label: const Text('سڕینەوەی یەکجاری', style: TextStyle(fontSize: 16)))),
+                                    
+                                    // دوگمەی ئەرشیفکردن
+                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isArchived ? Colors.green : Colors.indigo, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () => _archiveUser(uid, collection, data['name'], isArchived), icon: Icon(isArchived ? Icons.unarchive : Icons.archive), label: Text(isArchived ? 'هێنانەدەرەوە لە ئەرشیف' : 'خستنە ئەرشیفەوە', style: const TextStyle(fontSize: 16)))),
                                   ],
                                 ),
+                              ),
+
+                              // تابی 4: زانیاری کەسی
+                              ListView(
+                                padding: const EdgeInsets.all(20),
+                                children: [
+                                  ListTile(leading: const Icon(Icons.phone), title: const Text('ژمارە مۆبایل'), subtitle: Text(data['phone'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                                  const Divider(),
+                                  ListTile(leading: const Icon(Icons.email), title: const Text('ئیمەیڵی لۆگین'), subtitle: Text('${data['phone']}@ordarat.com', style: const TextStyle(fontSize: 16))),
+                                  const Divider(),
+                                  ListTile(leading: const Icon(Icons.calendar_today), title: const Text('بەرواری دروستکردنی هەژمار'), subtitle: Text(createdAt, style: const TextStyle(fontSize: 16))),
+                                ],
                               ),
                             ],
                           ),
@@ -509,6 +771,20 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDocumentPreviewCard(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return Container(
+        height: 150, width: double.infinity,
+        decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey[400]!, style: BorderStyle.solid)),
+        child: const Center(child: Text('هێشتا وێنە دانەنراوە', style: TextStyle(color: Colors.grey))),
+      );
+    }
+    return Container(
+      height: 200, width: double.infinity,
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.indigo[200]!), image: DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)),
     );
   }
 
@@ -537,7 +813,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   Widget _buildUserList(String collection) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection(collection).orderBy('completed_orders', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection(collection).orderBy('created_at', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
@@ -546,14 +822,18 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           String name = (data['name'] ?? '').toString().toLowerCase();
           String phone = (data['phone'] ?? '').toString();
           String city = data['city'] ?? '';
+          bool isArchived = data['is_archived'] ?? false;
           
+          // ئەگەر لە ئەرشیف بێت پیشانی مەدە مەگەر فلتەری ئەرشیف کارا بێت
+          if (isArchived != _showArchived) return false;
+
           bool matchesCity = _selectedCityFilter == 'هەموو شارەکان' || city == _selectedCityFilter;
           bool matchesSearch = name.contains(_searchQuery.toLowerCase()) || phone.contains(_searchQuery);
           
           return matchesCity && matchesSearch;
         }).toList();
 
-        if (docs.isEmpty) return const Center(child: Text('هیچ داتایەک نەدۆزرایەوە', style: TextStyle(color: Colors.grey, fontSize: 18)));
+        if (docs.isEmpty) return Center(child: Text(_showArchived ? 'هیچ ئەکاونتێک لە ئەرشیفدا نییە' : 'هیچ داتایەک نەدۆزرایەوە', style: const TextStyle(color: Colors.grey, fontSize: 18)));
 
         return ListView.builder(
           padding: const EdgeInsets.all(15),
@@ -572,14 +852,17 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             }
             
             Widget? crown;
-            if (index == 0 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.amber, size: 30); 
-            else if (index == 1 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.grey, size: 30); 
-            else if (index == 2 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.brown, size: 30); 
+            if (!_showArchived) {
+               if (index == 0 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.amber, size: 30); 
+               else if (index == 1 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.grey, size: 30); 
+               else if (index == 2 && data['completed_orders'] > 0) crown = const Icon(Icons.workspace_premium, color: Colors.brown, size: 30); 
+            }
 
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               elevation: 2,
+              color: _showArchived ? Colors.grey[100] : Colors.white,
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 onTap: () => _showUserProfile(uid, collection, data),
@@ -644,7 +927,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     onChanged: (newVal) => setState(() => _selectedCityFilter = newVal!),
                   ),
                 ),
-                if (_isLoading) const Padding(padding: EdgeInsets.only(right: 15), child: CircularProgressIndicator())
+                const SizedBox(width: 15),
+                // دوگمەی پیشاندانی ئەرشیف
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), foregroundColor: _showArchived ? Colors.white : Colors.indigo, backgroundColor: _showArchived ? Colors.indigo : Colors.white),
+                  onPressed: () => setState(() => _showArchived = !_showArchived),
+                  icon: Icon(_showArchived ? Icons.folder_special : Icons.archive),
+                  label: Text(_showArchived ? 'گەڕانەوە بۆ لیستی چالاک' : 'بینینی ئەرشیف'),
+                ),
               ],
             ),
           ),
@@ -655,8 +945,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           Expanded(
             child: TabBarView(
               children: [
-                Stack(children: [_buildUserList('Drivers'), Positioned(bottom: 20, right: 20, child: FloatingActionButton.extended(heroTag: 'd', onPressed: () => _showAddUserDialog('Drivers'), icon: const Icon(Icons.add), label: const Text('شۆفێری نوێ'), backgroundColor: Colors.blue))]),
-                Stack(children: [_buildUserList('Restaurants'), Positioned(bottom: 20, right: 20, child: FloatingActionButton.extended(heroTag: 'r', onPressed: () => _showAddUserDialog('Restaurants'), icon: const Icon(Icons.add), label: const Text('خوارنگەهی نوێ'), backgroundColor: Colors.orange))]),
+                Stack(children: [_buildUserList('Drivers'), if (!_showArchived) Positioned(bottom: 20, right: 20, child: FloatingActionButton.extended(heroTag: 'd', onPressed: () => _showAddUserDialog('Drivers'), icon: const Icon(Icons.add), label: const Text('شۆفێری نوێ'), backgroundColor: Colors.blue))]),
+                Stack(children: [_buildUserList('Restaurants'), if (!_showArchived) Positioned(bottom: 20, right: 20, child: FloatingActionButton.extended(heroTag: 'r', onPressed: () => _showAddUserDialog('Restaurants'), icon: const Icon(Icons.add), label: const Text('خوارنگەهی نوێ'), backgroundColor: Colors.orange))]),
               ],
             ),
           ),
