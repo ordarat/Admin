@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart'; // زیادکرا بۆ پەیوەندیکردن
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -19,7 +20,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   String _searchQuery = '';
   String _selectedCityFilter = 'هەموو شارەکان';
   bool _isLoading = false;
-  bool _showArchived = false; // بۆ پیشاندانی ئەکاونتە ئەرشیفکراوەکان
+  bool _showArchived = false; 
   final Color primaryBlue = const Color(0xFF0056D2);
 
   final List<String> _cities = ['هەموو شارەکان', 'دهۆک', 'زاخۆ', 'هەولێر', 'سلێمانی', 'کەرکوک', 'هەڵەبجە'];
@@ -111,6 +112,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     final TextEditingController contractStartCtrl = TextEditingController();
     final TextEditingController contractEndCtrl = TextEditingController();
     
+    final TextEditingController profileImgCtrl = TextEditingController();
+    final TextEditingController nationalIdCtrl = TextEditingController();
+    final TextEditingController licenseCtrl = TextEditingController();
+
     String selectedShift = _dynamicShifts.isNotEmpty ? _dynamicShifts[0] : 'کاتی ئازاد (بێ شەفت)';
     String selectedCity = _formCities[0]; 
 
@@ -121,44 +126,60 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           builder: (context, setStateDialog) {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Text(roleType == 'Drivers' ? 'شۆفێری نوێ' : 'خوارنگەهی نوێ', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
+              title: Text(roleType == 'Drivers' ? 'دروستکردنی شۆفێری نوێ' : 'دروستکردنی خوارنگەهی نوێ', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      value: selectedCity,
-                      decoration: const InputDecoration(labelText: 'شار', prefixIcon: Icon(Icons.location_city, color: Colors.blue)),
-                      items: _formCities.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
-                      onChanged: (newVal) => setStateDialog(() => selectedCity = newVal!),
-                    ),
-                    const SizedBox(height: 15),
-                    TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناوی تەواو', prefixIcon: Icon(Icons.person))),
-                    const SizedBox(height: 10),
-                    TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'مۆبایل', prefixIcon: Icon(Icons.phone))),
-                    const SizedBox(height: 10),
-                    TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: Icon(Icons.lock))),
-                    
-                    if (roleType == 'Drivers') ...[
-                      const SizedBox(height: 15),
+                child: SizedBox(
+                  width: 450,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       DropdownButtonFormField<String>(
-                        value: selectedShift,
-                        decoration: const InputDecoration(labelText: 'کاتی کارکردن', prefixIcon: Icon(Icons.access_time)),
-                        items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
+                        value: selectedCity,
+                        decoration: const InputDecoration(labelText: 'شار', prefixIcon: Icon(Icons.location_city, color: Colors.blue)),
+                        items: _formCities.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                        onChanged: (newVal) => setStateDialog(() => selectedCity = newVal!),
                       ),
-                    ],
+                      const SizedBox(height: 15),
+                      TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'ناوی تەواو', prefixIcon: Icon(Icons.person))),
+                      const SizedBox(height: 10),
+                      TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'مۆبایل', prefixIcon: Icon(Icons.phone))),
+                      const SizedBox(height: 10),
+                      TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: Icon(Icons.lock))),
+                      
+                      if (roleType == 'Drivers') ...[
+                        const SizedBox(height: 15),
+                        DropdownButtonFormField<String>(
+                          value: selectedShift,
+                          decoration: const InputDecoration(labelText: 'کاتی کارکردن (شەفت)', prefixIcon: Icon(Icons.access_time)),
+                          items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
+                          onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
+                        ),
+                      ],
 
-                    if (roleType == 'Restaurants') ...[
+                      if (roleType == 'Restaurants') ...[
+                        const SizedBox(height: 15),
+                        const Divider(),
+                        const Text('زانیاری گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                        const SizedBox(height: 10),
+                        TextField(controller: contractStartCtrl, readOnly: true, onTap: () => _selectDate(context, contractStartCtrl), decoration: const InputDecoration(labelText: 'بەرواری دەستپێك', prefixIcon: Icon(Icons.calendar_today, color: Colors.green))),
+                        const SizedBox(height: 10),
+                        TextField(controller: contractEndCtrl, readOnly: true, onTap: () => _selectDate(context, contractEndCtrl), decoration: const InputDecoration(labelText: 'بەرواری کۆتایی', prefixIcon: Icon(Icons.event_busy, color: Colors.red))),
+                      ],
+
                       const SizedBox(height: 15),
                       const Divider(),
-                      const Text('زانیاری گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                      const Text('بەڵگەنامەکان و وێنە (لینک)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                       const SizedBox(height: 10),
-                      TextField(controller: contractStartCtrl, readOnly: true, onTap: () => _selectDate(context, contractStartCtrl), decoration: const InputDecoration(labelText: 'بەرواری دەستپێك', prefixIcon: Icon(Icons.calendar_today, color: Colors.green))),
-                      const SizedBox(height: 10),
-                      TextField(controller: contractEndCtrl, readOnly: true, onTap: () => _selectDate(context, contractEndCtrl), decoration: const InputDecoration(labelText: 'بەرواری کۆتایی', prefixIcon: Icon(Icons.event_busy, color: Colors.red))),
-                    ]
-                  ],
+                      TextField(controller: profileImgCtrl, decoration: InputDecoration(labelText: roleType == 'Drivers' ? 'لینکی وێنەی پڕۆفایل' : 'لینکی لۆگۆی خوارنگەهـ', prefixIcon: const Icon(Icons.image, color: Colors.blue))),
+                      
+                      if (roleType == 'Drivers') ...[
+                        const SizedBox(height: 10),
+                        TextField(controller: nationalIdCtrl, decoration: const InputDecoration(labelText: 'لینکی کارتی نیشتیمانی', prefixIcon: Icon(Icons.badge, color: Colors.orange))),
+                        const SizedBox(height: 10),
+                        TextField(controller: licenseCtrl, decoration: const InputDecoration(labelText: 'لینکی مۆڵەتی شۆفێری', prefixIcon: Icon(Icons.drive_eta, color: Colors.green))),
+                      ],
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -168,7 +189,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   onPressed: () async {
                     if (nameCtrl.text.isEmpty || phoneCtrl.text.isEmpty || passCtrl.text.isEmpty) return;
                     Navigator.pop(context);
-                    await _createNewAccount(roleType, nameCtrl.text, phoneCtrl.text, passCtrl.text, selectedShift, contractStartCtrl.text, contractEndCtrl.text, selectedCity);
+                    await _createNewAccount(
+                      role: roleType, name: nameCtrl.text, phone: phoneCtrl.text, pass: passCtrl.text, 
+                      shift: selectedShift, cStart: contractStartCtrl.text, cEnd: contractEndCtrl.text, city: selectedCity,
+                      profileImg: profileImgCtrl.text, nationalId: nationalIdCtrl.text, license: licenseCtrl.text
+                    );
                   },
                   child: const Text('دروستکردن'),
                 ),
@@ -180,7 +205,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  Future<void> _createNewAccount(String role, String name, String phone, String pass, String shift, String cStart, String cEnd, String city) async {
+  Future<void> _createNewAccount({
+    required String role, required String name, required String phone, required String pass, 
+    required String shift, required String cStart, required String cEnd, required String city,
+    required String profileImg, required String nationalId, required String license
+  }) async {
     setState(() => _isLoading = true);
     try {
       String finalPhone = phone.startsWith('0') ? phone : '0$phone';
@@ -195,14 +224,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'plain_password': pass.trim(),
         'city': city,
         'is_active': true,
-        'is_archived': false, // ئەکاونتی نوێ بە دیفۆڵت لە ئەرشیف نییە
+        'is_archived': false, 
         'wallet_balance': 0, 
         'completed_orders': 0,
         'role': role == 'Drivers' ? 'driver' : 'restaurant', 
         'created_at': FieldValue.serverTimestamp(),
-        'profile_image': '',
-        'national_id_image': '',
-        'driving_license_image': '',
+        'profile_image': profileImg.trim(),
+        'national_id_image': nationalId.trim(),
+        'driving_license_image': license.trim(),
       };
       
       if (role == 'Drivers') {
@@ -252,7 +281,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   children: [
                     DropdownButtonFormField<String>(
                       value: selectedCity,
-                      decoration: const InputDecoration(labelText: 'شار (پارێزگا)', prefixIcon: Icon(Icons.location_city, color: Colors.blue)),
+                      decoration: const InputDecoration(labelText: 'شار', prefixIcon: Icon(Icons.location_city, color: Colors.blue)),
                       items: _formCities.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
                       onChanged: (newVal) => setStateDialog(() => selectedCity = newVal!),
                     ),
@@ -268,7 +297,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       const SizedBox(height: 15),
                       DropdownButtonFormField<String>(
                         value: selectedShift,
-                        decoration: const InputDecoration(labelText: 'گۆڕینی شەفتی کارکردن', prefixIcon: Icon(Icons.access_time)),
+                        decoration: const InputDecoration(labelText: 'گۆڕینی شەفت', prefixIcon: Icon(Icons.access_time)),
                         items: _dynamicShifts.map((String val) => DropdownMenuItem(value: val, child: Text(val, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (newVal) => setStateDialog(() => selectedShift = newVal!),
                       ),
@@ -279,9 +308,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       const Divider(),
                       const Text('نوێکردنەوەی گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                       const SizedBox(height: 10),
-                      TextField(controller: contractStartCtrl, readOnly: true, onTap: () => _selectDate(context, contractStartCtrl), decoration: const InputDecoration(labelText: 'بەرواری دەستپێك', prefixIcon: Icon(Icons.calendar_today, color: Colors.green))),
+                      TextField(controller: contractStartCtrl, readOnly: true, onTap: () => _selectDate(context, contractStartCtrl), decoration: const InputDecoration(labelText: 'دەستپێك', prefixIcon: Icon(Icons.calendar_today, color: Colors.green))),
                       const SizedBox(height: 10),
-                      TextField(controller: contractEndCtrl, readOnly: true, onTap: () => _selectDate(context, contractEndCtrl), decoration: const InputDecoration(labelText: 'بەرواری کۆتایی هاتن', prefixIcon: Icon(Icons.event_busy, color: Colors.red))),
+                      TextField(controller: contractEndCtrl, readOnly: true, onTap: () => _selectDate(context, contractEndCtrl), decoration: const InputDecoration(labelText: 'کۆتایی', prefixIcon: Icon(Icons.event_busy, color: Colors.red))),
                     ]
                   ],
                 ),
@@ -315,7 +344,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // --- سزای دارایی ---
   void _showPenaltyDialog(String uid, String collection, String name, double currentBalance) {
     final TextEditingController amountCtrl = TextEditingController();
     final TextEditingController reasonCtrl = TextEditingController();
@@ -367,18 +395,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // --- سیستەمی سڕکردنی کاتی (Temp Ban) ---
   void _showBanOptionsDialog(String uid, String collection, String name, bool isCurrentlyActive) {
     if (!isCurrentlyActive) {
-      // ئەگەر پێشتر باند کرابوو، تەنها بیکەرەوە
-      FirebaseFirestore.instance.collection(collection).doc(uid).update({
-        'is_active': true,
-        'ban_until': FieldValue.delete(),
-      });
+      FirebaseFirestore.instance.collection(collection).doc(uid).update({'is_active': true, 'ban_until': FieldValue.delete()});
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('هەژمارەکە چالاک کرایەوە!'), backgroundColor: Colors.green));
       return;
     }
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -389,24 +411,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           children: [
             const Text('بۆ چەند کاتێک دەتەوێت ئەم هەژمارە ڕابگریت؟', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 15),
-            ListTile(
-              leading: const Icon(Icons.timer), title: const Text('٢٤ کاتژمێر'),
-              onTap: () => _applyBan(context, uid, collection, const Duration(hours: 24)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.date_range), title: const Text('٣ ڕۆژ'),
-              onTap: () => _applyBan(context, uid, collection, const Duration(days: 3)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.calendar_month), title: const Text('١ هەفتە'),
-              onTap: () => _applyBan(context, uid, collection, const Duration(days: 7)),
-            ),
+            ListTile(leading: const Icon(Icons.timer), title: const Text('٢٤ کاتژمێر'), onTap: () => _applyBan(context, uid, collection, const Duration(hours: 24))),
+            ListTile(leading: const Icon(Icons.date_range), title: const Text('٣ ڕۆژ'), onTap: () => _applyBan(context, uid, collection, const Duration(days: 3))),
+            ListTile(leading: const Icon(Icons.calendar_month), title: const Text('١ هەفتە'), onTap: () => _applyBan(context, uid, collection, const Duration(days: 7))),
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.block, color: Colors.red), 
-              title: const Text('هەمیشەیی (باندی تەواو)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              onTap: () => _applyBan(context, uid, collection, null), // null واتە هەمیشەیی
-            ),
+            ListTile(leading: const Icon(Icons.block, color: Colors.red), title: const Text('هەمیشەیی (باندی تەواو)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)), onTap: () => _applyBan(context, uid, collection, null)),
           ],
         ),
       ),
@@ -416,7 +425,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   Future<void> _applyBan(BuildContext dialogContext, String uid, String collection, Duration? duration) async {
     Navigator.pop(dialogContext);
     Map<String, dynamic> updates = {'is_active': false};
-    
     if (duration != null) {
       DateTime unbanDate = DateTime.now().add(duration);
       updates['ban_until'] = unbanDate;
@@ -425,25 +433,21 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       updates['ban_until'] = FieldValue.delete();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('هەژمارەکە بە یەکجاری باند کرا!'), backgroundColor: Colors.red));
     }
-
     await FirebaseFirestore.instance.collection(collection).doc(uid).update(updates);
   }
 
-  // --- سیستەمی ئەرشیفکردن ---
   void _archiveUser(String uid, String collection, String name, bool isCurrentlyArchived) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(isCurrentlyArchived ? 'هێنانەدەرەوە لە ئەرشیف' : 'ئەرشیفکردنی ئەکاونت', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
-        content: Text(isCurrentlyArchived 
-          ? 'ئایا دەتەوێت ($name) بگەڕێنیتەوە بۆ لیستی سەرەکی؟' 
-          : 'ئایا دەتەوێت ($name) بخەیتە ئەرشیفەوە؟ بەم کارە لە لیستی سەرەکی نامێنێت بەڵام داتاکانی نافەوتێت و نەسڕێتەوە.'),
+        content: Text(isCurrentlyArchived ? 'ئایا دەتەوێت ($name) بگەڕێنیتەوە بۆ لیستی سەرەکی؟' : 'ئایا دەتەوێت ($name) بخەیتە ئەرشیفەوە؟ بەم کارە لە لیستی سەرەکی نامێنێت بەڵام داتاکانی نافەوتێت و نەسڕێتەوە.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('نەخێر')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: isCurrentlyArchived ? Colors.green : Colors.indigo, foregroundColor: Colors.white),
             onPressed: () async {
-              Navigator.pop(context); Navigator.pop(context); // داخستنی پڕۆفایلەکەش
+              Navigator.pop(context); Navigator.pop(context); 
               await FirebaseFirestore.instance.collection(collection).doc(uid).update({'is_archived': !isCurrentlyArchived});
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isCurrentlyArchived ? 'گەڕێنرایەوە لیستی سەرەکی.' : 'خرایە ئەرشیفەوە.'), backgroundColor: Colors.blue));
@@ -538,6 +542,41 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
+  void _deleteUser(String uid, String collection, String name) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('سڕینەوەی یەکجاری!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        content: Text('ئایا دڵنیایت دەتەوێت ($name) بە یەکجاری بسڕیتەوە؟ ئەم کارە ناگەڕێتەوە.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('نەخێر')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(context); Navigator.pop(context); 
+              await FirebaseFirestore.instance.collection(collection).doc(uid).delete();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ئەکاونتەکە سڕایەوە.'), backgroundColor: Colors.red));
+            },
+            child: const Text('بەڵێ، بیسڕەوە'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- فەنکشنی پەیوەندیکردن (Call) ---
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نەتوانرا پەیوەندی بکرێت، دڵنیابە لە ژمارەکە.'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   // --- پڕۆفایلی زەبەلاح (مۆدێرن) ---
   void _showUserProfile(String uid, String collection, Map<String, dynamic> data) {
     bool isActive = data['is_active'] ?? true;
@@ -617,6 +656,22 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       ],
                     ),
                     if (banInfo.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(banInfo, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+                    const SizedBox(height: 15),
+                    
+                    // --- دوگمەی تەلەفۆنکردن (نوێ) ---
+                    if (data['phone'] != null && data['phone'].toString().isNotEmpty)
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          elevation: 3,
+                        ),
+                        onPressed: () => _makePhoneCall(data['phone']),
+                        icon: const Icon(Icons.phone),
+                        label: Text('پەیوەندیکردن (${data['phone']})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
                   ],
                 ),
               ),
@@ -738,12 +793,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                     SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _showChangePasswordDialog(uid, collection, data['phone']), icon: const Icon(Icons.lock_reset, color: Colors.red), label: const Text('پێدانی پاسۆردی نوێ', style: TextStyle(color: Colors.red)))),
                                     const Divider(height: 30),
                                     
-                                    // دوگمەی سڕکردن یان کردنەوە
                                     SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () => _showBanOptionsDialog(uid, collection, data['name'], isActive), icon: Icon(isActive ? Icons.block : Icons.check_circle), label: Text(isActive ? 'سڕکردنی هەژمار (Temp Ban)' : 'لابردنی باند (چالاککردنەوە)', style: const TextStyle(fontSize: 16)))),
                                     const SizedBox(height: 15),
                                     
-                                    // دوگمەی ئەرشیفکردن
                                     SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isArchived ? Colors.green : Colors.indigo, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () => _archiveUser(uid, collection, data['name'], isArchived), icon: Icon(isArchived ? Icons.unarchive : Icons.archive), label: Text(isArchived ? 'هێنانەدەرەوە لە ئەرشیف' : 'خستنە ئەرشیفەوە', style: const TextStyle(fontSize: 16)))),
+                                    const SizedBox(height: 15),
+
+                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { Navigator.pop(context); _deleteUser(uid, collection, data['name']); }, icon: const Icon(Icons.delete_forever), label: const Text('سڕینەوەی یەکجاری', style: TextStyle(fontSize: 16)))),
                                   ],
                                 ),
                               ),
@@ -813,18 +869,29 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   Widget _buildUserList(String collection) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection(collection).orderBy('created_at', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection(collection).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
-        var docs = snapshot.data!.docs.where((doc) {
+        var allDocs = snapshot.data!.docs.toList();
+        allDocs.sort((a, b) {
+          var dataA = a.data() as Map<String, dynamic>;
+          var dataB = b.data() as Map<String, dynamic>;
+          Timestamp? tA = dataA['created_at'] as Timestamp?;
+          Timestamp? tB = dataB['created_at'] as Timestamp?;
+          if (tA == null && tB == null) return 0;
+          if (tA == null) return 1;
+          if (tB == null) return -1;
+          return tB.compareTo(tA);
+        });
+
+        var docs = allDocs.where((doc) {
           var data = doc.data() as Map<String, dynamic>;
           String name = (data['name'] ?? '').toString().toLowerCase();
           String phone = (data['phone'] ?? '').toString();
           String city = data['city'] ?? '';
           bool isArchived = data['is_archived'] ?? false;
           
-          // ئەگەر لە ئەرشیف بێت پیشانی مەدە مەگەر فلتەری ئەرشیف کارا بێت
           if (isArchived != _showArchived) return false;
 
           bool matchesCity = _selectedCityFilter == 'هەموو شارەکان' || city == _selectedCityFilter;
@@ -928,7 +995,6 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   ),
                 ),
                 const SizedBox(width: 15),
-                // دوگمەی پیشاندانی ئەرشیف
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), foregroundColor: _showArchived ? Colors.white : Colors.indigo, backgroundColor: _showArchived ? Colors.indigo : Colors.white),
                   onPressed: () => setState(() => _showArchived = !_showArchived),
