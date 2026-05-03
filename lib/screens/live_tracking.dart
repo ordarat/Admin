@@ -1,11 +1,10 @@
 // Path: lib/screens/live_tracking.dart
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
   const LiveTrackingScreen({super.key});
@@ -15,14 +14,9 @@ class LiveTrackingScreen extends StatefulWidget {
 }
 
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
-  LatLng _mapCenter = const LatLng(36.8679, 42.9830);
+  LatLng _mapCenter = const LatLng(36.8679, 42.9830); // دیفۆڵت (دهۆک)
   final MapController _mapController = MapController();
   
-  // گۆڕاوەکان بۆ دانانی لۆکەیشن بە پەنجە
-  bool _isEditingLocation = false;
-  String? _editingRestaurantId;
-  String? _editingRestaurantName;
-
   bool _showOnlineDrivers = true;
   bool _showOfflineDrivers = true;
   bool _showRestaurants = true;
@@ -43,102 +37,222 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     }
   }
 
-  void _showNotificationDialog(String? token, String userName) {
-    if (token == null || token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ئەم بەکارهێنەرە هێشتا ئەپەکەی نەکردووەتەوە.'), backgroundColor: Colors.orange));
-      return;
+  // --- فەنکشن بۆ پەیوەندیکردن ---
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نەتوانرا پەیوەندی بکرێت.'), backgroundColor: Colors.red));
+      }
     }
-    final TextEditingController titleCtrl = TextEditingController();
-    final TextEditingController bodyCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('ناردنی نامە بۆ: $userName', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'سەردێڕ', prefixIcon: Icon(Icons.title))),
-            const SizedBox(height: 10),
-            TextField(controller: bodyCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'ناوەڕۆکی نامە...', border: OutlineInputBorder())),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە', style: TextStyle(color: Colors.red))),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white),
-            onPressed: () async {
-              if (titleCtrl.text.isEmpty || bodyCtrl.text.isEmpty) return;
-              Navigator.pop(context);
-              const String serverKey = 'سێرڤەر_کلیلەکەت_لێرە_دابنێ'; 
-              try {
-                await http.post(
-                  Uri.parse('https://fcm.googleapis.com/fcm/send'),
-                  headers: {'Content-Type': 'application/json', 'Authorization': 'key=$serverKey'},
-                  body: jsonEncode({'to': token, 'notification': {'title': titleCtrl.text, 'body': bodyCtrl.text, 'sound': 'default'}}),
-                );
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نامەکە نێردرا!'), backgroundColor: Colors.green));
-              } catch (e) {
-                debugPrint("Error: $e");
-              }
-            },
-            icon: const Icon(Icons.send), label: const Text('ناردن'),
-          ),
-        ],
-      ),
-    );
   }
 
-  void _showUserProfile(String uid, String collection, Map<String, dynamic> data) {
-    bool isActive = data['is_active'] ?? true;
-    String? imageUrl = data['profile_image'] ?? data['image_url'];
+  // --- سڕینەوەی لۆکەیشن ---
+  Future<void> _removeLocation(String uid, String collection) async {
+    await FirebaseFirestore.instance.collection(collection).doc(uid).update({
+      'latitude': FieldValue.delete(),
+      'longitude': FieldValue.delete(),
+    });
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لۆکەیشنەکە بە سەرکەوتوویی سڕایەوە!'), backgroundColor: Colors.green));
+    }
+  }
 
+  // --- دیالۆگی نوێی پڕۆفایل لەسەر نەخشە ---
+  void _showMapProfileDialog(String uid, String collection, Map<String, dynamic> data) {
+    String profileImg = data['profile_image'] ?? data['image_url'] ?? '';
+    Color themeColor = collection == 'Drivers' ? Colors.blue : Colors.orange;
+    
     showDialog(
       context: context,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Container(
-          width: 500, padding: const EdgeInsets.all(25),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Align(alignment: Alignment.topLeft, child: IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => Navigator.pop(context))),
-                Container(
-                  width: 100, height: 100,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: collection == 'Drivers' ? Colors.blue[50] : Colors.orange[50], border: Border.all(color: collection == 'Drivers' ? Colors.blue : Colors.orange, width: 3)),
-                  child: (imageUrl != null && imageUrl.isNotEmpty) ? ClipOval(child: Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 40, color: Colors.grey))) : Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 40, color: collection == 'Drivers' ? Colors.blue : Colors.orange),
-                ),
-                const SizedBox(height: 15),
-                Text(data['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                Text(data['phone'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
-                if (collection == 'Drivers') Text((data['is_online'] ?? false) ? 'ئێستا ئۆنلاینە 🟢' : 'ئۆفلاینە ⚪', style: TextStyle(fontWeight: FontWeight.bold, color: (data['is_online'] ?? false) ? Colors.green : Colors.grey)),
-                const Divider(height: 40),
-                Row(
-                  children: [
-                    Expanded(child: _buildStatBox('باڵانس', '${data['wallet_balance'] ?? 0} IQD', Icons.account_balance_wallet, Colors.green)),
-                    const SizedBox(width: 15),
-                    Expanded(child: _buildStatBox('ئۆردەرەکان', '${data['completed_orders'] ?? 0}', Icons.shopping_bag, Colors.blue)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                if (collection == 'Drivers') ...[
-                  SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { Navigator.pop(context); _showNotificationDialog(data['fcm_token'], data['name'] ?? ''); }, icon: const Icon(Icons.notifications_active), label: const Text('ناردنی نامە بۆ مۆبایلەکەی'))),
-                  const SizedBox(height: 20),
+          width: 350, padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(alignment: Alignment.topRight, child: IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(context))),
+              
+              // وێنەی پڕۆفایل
+              Container(
+                width: 90, height: 90,
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: themeColor, width: 3)),
+                child: profileImg.isNotEmpty 
+                  ? ClipOval(child: Image.network(profileImg, fit: BoxFit.cover, errorBuilder: (c,e,s) => Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 40, color: themeColor)))
+                  : CircleAvatar(backgroundColor: themeColor.withOpacity(0.1), child: Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 40, color: themeColor)),
+              ),
+              const SizedBox(height: 10),
+              
+              // ناو و ژمارە
+              Text(data['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(data['phone'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+              const SizedBox(height: 15),
+
+              // زانیاری ئۆردەر و باڵانس
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Column(
+                    children: [
+                      const Text('باڵانس', style: TextStyle(color: Colors.grey)),
+                      Text('${data['wallet_balance'] ?? 0} IQD', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
+                    ],
+                  ),
+                  Container(width: 1, height: 40, color: Colors.grey[300]),
+                  Column(
+                    children: [
+                      const Text('ئۆردەرەکان', style: TextStyle(color: Colors.grey)),
+                      Text('${data['completed_orders'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 16)),
+                    ],
+                  ),
                 ],
-                SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () async { await FirebaseFirestore.instance.collection(collection).doc(uid).update({'is_active': !isActive}); if (!context.mounted) return; Navigator.pop(context); }, icon: Icon(isActive ? Icons.block : Icons.check_circle), label: Text(isActive ? 'راگرتنی هەژمار (باندکردن)' : 'چالاککردنەوە', style: const TextStyle(fontSize: 16)))),
-              ],
-            ),
+              ),
+              const SizedBox(height: 25),
+
+              // دوگمەی پەیوەندیکردن
+              SizedBox(
+                width: double.infinity, height: 45,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  onPressed: () => _makePhoneCall(data['phone'] ?? ''),
+                  icon: const Icon(Icons.phone), label: const Text('پەیوەندیکردن'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              
+              // دوگمەی سڕینەوەی لۆکەیشن لەبری باندکردن
+              SizedBox(
+                width: double.infinity, height: 45,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50], foregroundColor: Colors.red, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: Colors.red))),
+                  onPressed: () => _removeLocation(uid, collection),
+                  icon: const Icon(Icons.location_off), label: const Text('سڕینەوەی لۆکەیشن'),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStatBox(String title, String value, IconData icon, Color color) {
-    return Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withOpacity(0.3))), child: Column(children: [Icon(icon, color: color, size: 30), const SizedBox(height: 10), Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(title, style: const TextStyle(color: Colors.grey, fontSize: 14))]));
+  // --- تابی زۆر شاز بۆ دانانی لۆکەیشنی خوارنگەهـ ---
+  void _showSetLocationDialog() {
+    String? selectedRestId;
+    TextEditingController linkCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.add_location_alt, color: Colors.indigo),
+                SizedBox(width: 10),
+                Text('دانانی لۆکەیشنی دەقیق', style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('١. خوارنگەهـ هەڵبژێرە:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 10),
+                  
+                  // هێنانی لیستی خوارنگەهەکان ڕاستەوخۆ لە فایەربەیس
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('Restaurants').orderBy('name').snapshots(),
+                    builder: (context, snap) {
+                      if (!snap.hasData) return const CircularProgressIndicator();
+                      var docs = snap.data!.docs;
+                      
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey[300]!)),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            hint: const Text('ناوی خوارنگەهـ...'),
+                            value: selectedRestId,
+                            items: docs.map((doc) {
+                              var data = doc.data() as Map<String, dynamic>;
+                              bool hasLoc = data['latitude'] != null;
+                              return DropdownMenuItem<String>(
+                                value: doc.id,
+                                child: Text('${data['name']} ${hasLoc ? "(لۆکەیشنی هەیە)" : "(بێ لۆکەیشن)"}', style: TextStyle(color: hasLoc ? Colors.green : Colors.red)),
+                              );
+                            }).toList(),
+                            onChanged: (val) => setStateDialog(() => selectedRestId = val),
+                          ),
+                        ),
+                      );
+                    }
+                  ),
+                  const SizedBox(height: 20),
+
+                  const Text('٢. لینکی گوگڵ ماپ (Google Maps):', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: linkCtrl,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'لینکەکە لێرە Paste بکە...\nیان کۆردینەیت (36.192, 44.012)',
+                      filled: true, fillColor: Colors.blue[50],
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                onPressed: () async {
+                  if (selectedRestId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تکایە خوارنگەهـ هەڵبژێرە'), backgroundColor: Colors.red));
+                    return;
+                  }
+                  
+                  String text = linkCtrl.text;
+                  // دۆزینەوەی ژمارەی دەقیق لەناو لینکەکە یان تێکستەکە
+                  RegExp regExp = RegExp(r'(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)');
+                  var match = regExp.firstMatch(text);
+                  
+                  if (match != null) {
+                    double lat = double.parse(match.group(1)!);
+                    double lng = double.parse(match.group(2)!);
+                    
+                    Navigator.pop(context); // داخستنی دیالۆگەکە
+                    
+                    await FirebaseFirestore.instance.collection('Restaurants').doc(selectedRestId).update({
+                      'latitude': lat,
+                      'longitude': lng,
+                    });
+                    
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لۆکەیشن بە دەقیقی دانرا!'), backgroundColor: Colors.green));
+                    _mapController.move(LatLng(lat, lng), 15.0); // فڕینی نەخشەکە بۆ شوێنە نوێیەکە
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نەتوانرا لۆکەیشنەکە لە لینکەکە دەربهێنرێت!'), backgroundColor: Colors.orange));
+                  }
+                },
+                icon: const Icon(Icons.check_circle), label: const Text('سەیڤکردن لەسەر نەخشە'),
+              )
+            ],
+          );
+        }
+      ),
+    );
   }
 
   @override
@@ -162,7 +276,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                         point: LatLng(d['latitude'], d['longitude']),
                         width: 80, height: 80,
                         child: GestureDetector(
-                          onTap: () => _showUserProfile(doc.id, 'Restaurants', d),
+                          onTap: () => _showMapProfileDialog(doc.id, 'Restaurants', d),
                           child: Column(children: [
                             Container(width: 45, height: 45, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.orange, width: 3), color: Colors.white, boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)]), child: (imageUrl != null && imageUrl.isNotEmpty) ? ClipOval(child: Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.storefront, color: Colors.orange))) : const Icon(Icons.storefront, color: Colors.orange)),
                             const SizedBox(height: 4),
@@ -192,7 +306,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                           point: LatLng(d['latitude'], d['longitude']),
                           width: 60, height: 60,
                           child: GestureDetector(
-                            onTap: () => _showUserProfile(doc.id, 'Drivers', d),
+                            onTap: () => _showMapProfileDialog(doc.id, 'Drivers', d),
                             child: Stack(
                               clipBehavior: Clip.none,
                               alignment: Alignment.center,
@@ -215,9 +329,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                       options: MapOptions(
                         initialCenter: _mapCenter,
                         initialZoom: 13.0,
-                        onTap: (tapPos, point) {
-                          if (_isEditingLocation) _updateLocationByTap(point);
-                        },
                       ),
                       children: [
                         TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.ibrahim.admin'),
@@ -279,28 +390,17 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           ),
         ),
 
+        // دوگمەی دانانی لۆکەیشنی نوێ
         Positioned(
           bottom: 20, right: 20,
           child: FloatingActionButton.extended(
-            heroTag: 'addRest',
-            backgroundColor: _isEditingLocation ? Colors.red : const Color(0xFF0056D2),
-            onPressed: _isEditingLocation ? () => setState(() => _isEditingLocation = false) : _showRestPicker,
-            label: Text(_isEditingLocation ? 'پاشگەزبوونەوە' : 'دانانی لۆکەیشنی خوارنگەهـ', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-            icon: Icon(_isEditingLocation ? Icons.close : Icons.add_location_alt, color: Colors.white),
+            heroTag: 'addLocationMap',
+            backgroundColor: const Color(0xFF0056D2),
+            onPressed: _showSetLocationDialog,
+            label: const Text('دانانی لۆکەیشنی خوارنگەهـ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            icon: const Icon(Icons.add_location_alt, color: Colors.white),
           ),
         ),
-
-        if (_isEditingLocation)
-          Positioned(
-            top: 20, left: 0, right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)]),
-                child: Text('تکایە کلیک لەسەر نەخشەکە بکە بۆ دیاریکردنی شوێنی [ $_editingRestaurantName ]', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -313,156 +413,5 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         child: Row(children: [Icon(value ? Icons.check_box : Icons.check_box_outline_blank, color: color, size: 20), const SizedBox(width: 8), Text(title, style: TextStyle(color: value ? Colors.black : Colors.grey, fontSize: 13))]),
       ),
     );
-  }
-
-  void _showRestPicker() {
-    showDialog(context: context, builder: (context) => AlertDialog(
-      title: const Text('خوارنگەهێک هەڵبژێرە بۆ دیاریکردنی شوێنەکەی', style: TextStyle(color: Colors.indigo, fontSize: 16, fontWeight: FontWeight.bold)),
-      content: SizedBox(width: 350, height: 400, child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('Restaurants').snapshots(),
-        builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          var docs = snap.data!.docs;
-          if (docs.isEmpty) return const Center(child: Text('هیچ خوارنگەهێک نییە'));
-          return ListView(children: docs.map((d) {
-            bool hasLocation = d['latitude'] != null;
-            return ListTile(
-              leading: const Icon(Icons.storefront, color: Colors.orange),
-              title: Text(d['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(hasLocation ? 'لۆکەیشنی هەیە' : 'بێ لۆکەیشن', style: TextStyle(color: hasLocation ? Colors.green : Colors.red)),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-              onTap: () {
-                Navigator.pop(context);
-                _showLocationOptionsDialog(d.id, d['name'], hasLocation);
-              },
-            );
-          }).toList());
-        }
-      )),
-    ));
-  }
-
-  // --- شاشەی هەڵبژاردنی چۆنیەتی دانانی لۆکەیشن ---
-  void _showLocationOptionsDialog(String restId, String restName, bool hasLocation) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('دانانی لۆکەیشن بۆ ($restName)', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.touch_app, color: Colors.blue, size: 30),
-              title: const Text('لەسەر نەخشە دیاری بکە (دەستی)', style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: const Text('پەنجە بدە لە نەخشەکە بۆ دانانی', style: TextStyle(fontSize: 12)),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() { _isEditingLocation = true; _editingRestaurantId = restId; _editingRestaurantName = restName; });
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.link, color: Colors.green, size: 30),
-              title: const Text('بە لینکی گوگڵ ماپ (دەقیق)', style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: const Text('لینکی کۆپی کراو دابنێ', style: TextStyle(fontSize: 12)),
-              onTap: () {
-                Navigator.pop(context);
-                _showPasteLinkDialog(restId, restName);
-              },
-            ),
-            if (hasLocation) ...[
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.delete_forever, color: Colors.red, size: 30),
-                title: const Text('سڕینەوەی لۆکەیشن', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _removeLocation(restId);
-                },
-              ),
-            ]
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- سیستەمی زیرەکی خوێندنەوەی لینکی گوگڵ ماپ ---
-  void _showPasteLinkDialog(String restId, String restName) {
-    TextEditingController linkCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('لینکی لۆکەیشن - $restName', style: const TextStyle(color: Colors.indigo)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('دەتوانیت ڕاستەوخۆ لینکی گوگڵ ماپ، یان ژمارەی (Latitude, Longitude) لێرە Paste بکەیت.', style: TextStyle(color: Colors.grey, fontSize: 13)),
-            const SizedBox(height: 15),
-            TextField(
-              controller: linkCtrl,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'نموونە: 36.192, 44.012\nیان: https://www.google.com/maps/...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-                filled: true, fillColor: Colors.grey[100],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە', style: TextStyle(color: Colors.red))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            onPressed: () async {
-              String text = linkCtrl.text;
-              
-              // ئەم کۆدە زیرەکە بە دوای دوو ژمارەدا دەگەڕێت کە بۆ لۆکەیشن بەکاردێن لەناو هەر لینکێکدا بێت
-              RegExp regExp = RegExp(r'(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)');
-              var match = regExp.firstMatch(text);
-              
-              if (match != null) {
-                double lat = double.parse(match.group(1)!);
-                double lng = double.parse(match.group(2)!);
-                
-                await FirebaseFirestore.instance.collection('Restaurants').doc(restId).update({
-                  'latitude': lat,
-                  'longitude': lng,
-                });
-                
-                if (!context.mounted) return;
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لۆکەیشن جێگیر کرا بە سەرکەوتوویی!'), backgroundColor: Colors.green));
-                
-                // بردنەوەی نەخشەکە بۆ ئەو شوێنەی تازە دایناوە
-                _mapController.move(LatLng(lat, lng), 15.0);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نەتوانرا لۆکەیشنەکە بخوێندرێتەوە. دڵنیابە لە لینکەکە.'), backgroundColor: Colors.red));
-              }
-            },
-            child: const Text('سەیڤکردن'),
-          )
-        ]
-      )
-    );
-  }
-
-  // --- سڕینەوەی لۆکەیشن ---
-  Future<void> _removeLocation(String restId) async {
-    await FirebaseFirestore.instance.collection('Restaurants').doc(restId).update({
-      'latitude': FieldValue.delete(),
-      'longitude': FieldValue.delete(),
-    });
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لۆکەیشنی خوارنگەهەکە سڕایەوە!'), backgroundColor: Colors.orange));
-  }
-
-  // --- دانانی لۆکەیشن بە پەنجە ---
-  Future<void> _updateLocationByTap(LatLng p) async {
-    await FirebaseFirestore.instance.collection('Restaurants').doc(_editingRestaurantId).update({'latitude': p.latitude, 'longitude': p.longitude});
-    setState(() => _isEditingLocation = false);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لۆکەیشنی خوارنگەهەکە جێگیر کرا!'), backgroundColor: Colors.green));
   }
 }
