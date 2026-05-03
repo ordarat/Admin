@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -179,14 +180,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  // مێشکی ڕاستەقینەی دروستکردنی ئەکاونت بەبێ کێشە لەسەر وێب
   Future<void> _createNewAccount(String role, String name, String phone, String pass, String shift, String cStart, String cEnd, String city) async {
     setState(() => _isLoading = true);
     try {
       String finalPhone = phone.startsWith('0') ? phone : '0$phone';
-      String finalEmail = "$finalPhone@ordarat.com"; // گۆڕدرا بۆ دۆمەینی فەرمی
+      String finalEmail = "$finalPhone@ordarat.com"; 
       
-      // بەکارهێنانی options بە فەرمی بۆ ئەوەی لە وێبدا ئێرۆر نەدات
       FirebaseApp tempApp = await Firebase.initializeApp(
         name: 'TempApp_${DateTime.now().millisecondsSinceEpoch}', 
         options: Firebase.app().options, 
@@ -215,7 +214,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       }
 
       await FirebaseFirestore.instance.collection(role).doc(userCred.user!.uid).set(userData);
-      await tempApp.delete(); // سڕینەوەی ئەپە کاتییەکە بێ کێشە
+      await tempApp.delete(); 
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بە سەرکەوتوویی دروست کرا!'), backgroundColor: Colors.green));
@@ -339,103 +338,205 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
+  // مێشکی پڕۆفایلە زەبەلاحە نوێیەکە (360-Degree Profile)
   void _showUserProfile(String uid, String collection, Map<String, dynamic> data) {
     bool isActive = data['is_active'] ?? true;
+    bool isOnline = collection == 'Drivers' ? (data['is_online'] ?? false) : false;
+    
     bool isContractExpired = false;
-    String contractEndStr = data['contract_end'] ?? '';
-    if (collection == 'Restaurants' && contractEndStr.isNotEmpty) {
-      try { if (DateTime.parse(contractEndStr).isBefore(DateTime.now())) isContractExpired = true; } catch (e) {}
+    if (collection == 'Restaurants' && data['contract_end'] != null && data['contract_end'].toString().isNotEmpty) {
+      try { if (DateTime.parse(data['contract_end']).isBefore(DateTime.now())) isContractExpired = true; } catch (e) {}
     }
+
+    String createdAt = 'نەزانراو';
+    if (data['created_at'] != null) {
+      try { createdAt = DateFormat('yyyy-MM-dd HH:mm').format((data['created_at'] as Timestamp).toDate()); } catch (e) {}
+    }
+
+    Color themeColor = collection == 'Drivers' ? Colors.blue : Colors.orange;
 
     showDialog(
       context: context,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          width: 500, padding: const EdgeInsets.all(25),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 600,
+          height: 700,
+          child: Column(
+            children: [
+              // بەشی سەرەوە (Header)
+              Container(
+                height: 120,
+                width: double.infinity,
+                decoration: BoxDecoration(gradient: LinearGradient(colors: [themeColor.withOpacity(0.8), themeColor])),
+                child: Stack(
                   children: [
-                    IconButton(icon: const Icon(Icons.edit, color: Colors.blue), tooltip: 'دەستکاری زانیاری', onPressed: () => _showEditUserDialog(uid, collection, data)),
-                    IconButton(icon: const Icon(Icons.delete_forever, color: Colors.red), tooltip: 'سڕینەوەی یەکجاری', onPressed: () => _deleteUser(uid, collection, data['name'])),
+                    Positioned(top: 10, right: 10, child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))),
+                    Positioned(top: 10, left: 10, child: IconButton(icon: const Icon(Icons.edit, color: Colors.white), tooltip: 'دەستکاری', onPressed: () => _showEditUserDialog(uid, collection, data))),
                   ],
                 ),
-                CircleAvatar(radius: 50, backgroundColor: collection == 'Drivers' ? Colors.blue[100] : Colors.orange[100], child: Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.restaurant, size: 50, color: collection == 'Drivers' ? Colors.blue : Colors.orange)),
-                const SizedBox(height: 15),
-                Text(data['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                Text(data['phone'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
-                
-                const SizedBox(height: 5),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.location_city, size: 16, color: Colors.black54),
-                      const SizedBox(width: 5),
-                      Text(data['city'] ?? 'دیاری نەکراوە', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
-                    ],
-                  ),
+              ),
+              
+              // وێنە و ناوی پڕۆفایل
+              Transform.translate(
+                offset: const Offset(0, -50),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 100, height: 100,
+                      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+                      child: CircleAvatar(backgroundColor: themeColor.withOpacity(0.1), child: Icon(collection == 'Drivers' ? Icons.motorcycle : Icons.storefront, size: 50, color: themeColor)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(data['name'] ?? 'بێ ناو', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(data['city'] ?? 'دیاری نەکراوە', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // باجەکان (Badges)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildBadge(isActive ? 'هەژماری چالاک' : 'هەژماری باندکراو', isActive ? Colors.green : Colors.red),
+                        const SizedBox(width: 10),
+                        if (collection == 'Drivers') _buildBadge(isOnline ? 'ئۆنلاین' : 'ئۆفلاین', isOnline ? Colors.green : Colors.grey),
+                        if (collection == 'Restaurants') _buildBadge(isContractExpired ? 'گرێبەست بەسەرچووە' : 'گرێبەست کارایە', isContractExpired ? Colors.red : Colors.green),
+                      ],
+                    ),
+                  ],
                 ),
-                
-                if (collection == 'Drivers') ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.indigo[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.indigo[100]!)),
-                    child: Text(data['shift'] ?? 'کاتی ئازاد (بێ شەفت)', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-
-                if (collection == 'Restaurants') ...[
-                  const SizedBox(height: 15),
-                  Container(
-                    width: double.infinity, padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(color: isContractExpired ? Colors.red[50] : Colors.green[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: isContractExpired ? Colors.red : Colors.green)),
+              ),
+              
+              // تابەکان بۆ داتای گشتگیر
+              Expanded(
+                child: Transform.translate(
+                  offset: const Offset(0, -30),
+                  child: DefaultTabController(
+                    length: 3,
                     child: Column(
                       children: [
-                        Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.handshake, color: isContractExpired ? Colors.red : Colors.green), const SizedBox(width: 8), Text('زانیاری گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isContractExpired ? Colors.red : Colors.green))]),
-                        const SizedBox(height: 10),
-                        Text('لە: ${data['contract_start'] ?? 'دیاری نەکراوە'}', style: const TextStyle(fontSize: 14)),
-                        Text('تا: ${data['contract_end'] ?? 'دیاری نەکراوە'}', style: const TextStyle(fontSize: 14)),
-                        const SizedBox(height: 5),
-                        Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: isContractExpired ? Colors.red : Colors.green, borderRadius: BorderRadius.circular(10)), child: Text(isContractExpired ? 'بەسەرچووە' : 'کارایە', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                        TabBar(
+                          labelColor: themeColor, unselectedLabelColor: Colors.grey, indicatorColor: themeColor,
+                          tabs: const [Tab(text: 'دارایی و کار'), Tab(text: 'زانیاری کەسی'), Tab(text: 'سکیورێتی')],
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              // تابی دارایی و کار
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(child: _buildStatCard('باڵانسی جزدان', '${data['wallet_balance'] ?? 0} IQD', Icons.account_balance_wallet, Colors.green)),
+                                        const SizedBox(width: 15),
+                                        Expanded(child: _buildStatCard('کۆی ئۆردەرەکان', '${data['completed_orders'] ?? 0}', Icons.shopping_bag, themeColor)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+                                    if (collection == 'Drivers')
+                                      ListTile(tileColor: Colors.indigo[50], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), leading: const Icon(Icons.access_time, color: Colors.indigo), title: const Text('شەفتی کارکردن', style: TextStyle(fontWeight: FontWeight.bold)), trailing: Text(data['shift'] ?? 'بێ شەفت', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))),
+                                    if (collection == 'Restaurants')
+                                      Container(
+                                        padding: const EdgeInsets.all(15),
+                                        decoration: BoxDecoration(color: Colors.orange[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange[200]!)),
+                                        child: Column(
+                                          children: [
+                                            const Row(children: [Icon(Icons.handshake, color: Colors.orange), SizedBox(width: 10), Text('زانیاری گرێبەست', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))]),
+                                            const Divider(),
+                                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('دەستپێک:'), Text(data['contract_start'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold))]),
+                                            const SizedBox(height: 5),
+                                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('کۆتایی:'), Text(data['contract_end'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold))]),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              
+                              // تابی زانیاری کەسی
+                              ListView(
+                                padding: const EdgeInsets.all(20),
+                                children: [
+                                  ListTile(leading: const Icon(Icons.phone), title: const Text('ژمارە مۆبایل'), subtitle: Text(data['phone'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                                  const Divider(),
+                                  ListTile(leading: const Icon(Icons.email), title: const Text('ئیمەیڵی لۆگین'), subtitle: Text('${data['phone']}@ordarat.com', style: const TextStyle(fontSize: 16))),
+                                  const Divider(),
+                                  ListTile(leading: const Icon(Icons.calendar_today), title: const Text('بەرواری دروستکردنی هەژمار'), subtitle: Text(createdAt, style: const TextStyle(fontSize: 16))),
+                                ],
+                              ),
+
+                              // تابی سکیورێتی و کردارەکان
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red[200]!)),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('پاسۆردی ئەکاونت', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)), Text('تەنها بۆ بەڕێوەبەر دەردەکەوێت', style: TextStyle(fontSize: 12, color: Colors.red))]),
+                                          Text(data['plain_password'] ?? 'نەزانراوە', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { Navigator.pop(context); _showNotificationDialog(data['fcm_token'], data['name'] ?? ''); }, icon: const Icon(Icons.notifications_active), label: const Text('ناردنی نۆتیفیکەیشن بۆ مۆبایلەکەی'))),
+                                    const SizedBox(height: 15),
+                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () async { await FirebaseFirestore.instance.collection(collection).doc(uid).update({'is_active': !isActive}); if (!context.mounted) return; Navigator.pop(context); }, icon: Icon(isActive ? Icons.block : Icons.check_circle), label: Text(isActive ? 'راگرتنی هەژمار (باندکردن)' : 'چالاککردنەوەی هەژمار', style: const TextStyle(fontSize: 16)))),
+                                    const SizedBox(height: 15),
+                                    SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { Navigator.pop(context); _deleteUser(uid, collection, data['name']); }, icon: const Icon(Icons.delete_forever), label: const Text('سڕینەوەی یەکجاری', style: TextStyle(fontSize: 16)))),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ],
-                
-                const Divider(height: 40),
-                Row(children: [Expanded(child: _buildStatBox('باڵانس', '${data['wallet_balance'] ?? 0} IQD', Icons.account_balance_wallet, Colors.green)), const SizedBox(width: 15), Expanded(child: _buildStatBox('ئۆردەرەکان', '${data['completed_orders'] ?? 0}', Icons.shopping_bag, Colors.blue))]),
-                const SizedBox(height: 20),
-
-                SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { Navigator.pop(context); _showNotificationDialog(data['fcm_token'], data['name'] ?? ''); }, icon: const Icon(Icons.notifications_active), label: const Text('ناردنی نامە بۆ مۆبایلەکەی'))),
-                const SizedBox(height: 20),
-
-                ListTile(tileColor: Colors.grey[100], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), leading: const Icon(Icons.lock, color: Colors.redAccent), title: const Text('وشەی نهێنی (پاسۆرد)', style: TextStyle(color: Colors.grey)), subtitle: Text(data['plain_password'] ?? 'نەزانراوە', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black))),
-                const SizedBox(height: 20),
-
-                SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: isActive ? Colors.orange : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () async { await FirebaseFirestore.instance.collection(collection).doc(uid).update({'is_active': !isActive}); if (!context.mounted) return; Navigator.pop(context); }, icon: Icon(isActive ? Icons.block : Icons.check_circle), label: Text(isActive ? 'راگرتنی هەژمار (باندکردن)' : 'چالاککردنەوە', style: const TextStyle(fontSize: 16)))),
-              ],
-            ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStatBox(String title, String value, IconData icon, Color color) {
-    return Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withOpacity(0.3))), child: Column(children: [Icon(icon, color: color, size: 30), const SizedBox(height: 10), Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(title, style: const TextStyle(color: Colors.grey, fontSize: 14))]));
+  Widget _buildBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color)),
+      child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[200]!), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 5)]),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 10),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        ],
+      ),
+    );
   }
 
   Widget _buildUserList(String collection) {
     return StreamBuilder<QuerySnapshot>(
-      // زۆر گرنگە کە لێرەوە بە شێوەیەکی ڕاستەقینە داتاکان دەخوێنێتەوە بەپێی ئۆردەرەکان
       stream: FirebaseFirestore.instance.collection(collection).orderBy('completed_orders', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
