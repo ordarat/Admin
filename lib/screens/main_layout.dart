@@ -13,6 +13,7 @@ import 'financial_report.dart';
 import 'settings_screen.dart';
 import 'employees_screen.dart';
 import 'admin_login.dart';
+import 'leaderboard_screen.dart'; // شاشە نوێیەکە لێرەدا زیاد کراوە
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -34,11 +35,11 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   void initState() {
     super.initState();
-    _loadUserPermissions();
+    _setupPermissionsListener();
   }
 
-  // مێشکی سیستەمەکە کە ئیمەیڵەکە لە فایەربەیسەوە دەخوێنێتەوە
-  Future<void> _loadUserPermissions() async {
+  // سیستەمی گوێگرتنی ڕاستەوخۆ بۆ دەسەڵاتەکان
+  Future<void> _setupPermissionsListener() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
@@ -46,54 +47,49 @@ class _MainLayoutState extends State<MainLayout> {
       String uid = user.uid;
       String email = user.email ?? '';
 
-      var doc = await FirebaseFirestore.instance.collection('Admins').doc(uid).get();
+      // یەکەم جار پشکنینی خاوەن کار دەکات
+      var masterDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('MasterAdmin').get();
+      String masterEmail = masterDoc.exists ? (masterDoc.data()?['email'] ?? '') : '';
 
-      if (doc.exists && doc.data() != null) {
-        var data = doc.data()!;
-        _isAdmin = data['role'] == 'admin';
-        _permissions = data['permissions'] ?? {};
+      if (masterEmail.isNotEmpty && email.toLowerCase() == masterEmail.toLowerCase()) { 
+        // ئەگەر تۆ خاوەنی کۆمپانیا بوویت، دڵنیادەبێتەوە کە لە داتابەیس ئەدمینیت
+        await FirebaseFirestore.instance.collection('Admins').doc(uid).set({
+          'name': 'بەڕێوەبەری سەرەکی',
+          'email': email,
+          'role': 'admin',
+          'is_active': true,
+          'created_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       } 
-      else {
-        // === لێرەدا دەچێت ئیمەیڵی خاوەن کار لە فایەربەیس دەهێنێت ===
-        var masterDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('MasterAdmin').get();
-        String masterEmail = '';
+
+      // ئینجا بە شێوەی ڕاستەوخۆ (Live) چاودێری ئەکاونتەکەی دەکات
+      FirebaseFirestore.instance.collection('Admins').doc(uid).snapshots().listen((doc) async {
+        if (!doc.exists) {
+           await FirebaseAuth.instance.signOut();
+           if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
+           return;
+        }
+
+        var data = doc.data()!;
+        bool isActive = data['is_active'] ?? false;
         
-        if (masterDoc.exists && masterDoc.data() != null) {
-          masterEmail = masterDoc.data()!['email'] ?? '';
+        // ئەگەر باند کرا لەلایەن بەڕێوەبەرەوە، یەکسەر دەری بکە
+        if (!isActive) {
+           await FirebaseAuth.instance.signOut();
+           if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
+           return;
         }
 
-        // ئەگەر ئیمەیڵەکەی فایەربەیس و ئیمەیڵی لۆگینەکە یەکیان گرت
-        if (masterEmail.isNotEmpty && email.toLowerCase() == masterEmail.toLowerCase()) { 
-          await FirebaseFirestore.instance.collection('Admins').doc(uid).set({
-            'name': 'بەڕێوەبەری سەرەکی',
-            'email': email,
-            'role': 'admin',
-            'is_active': true,
-            'created_at': FieldValue.serverTimestamp(),
+        if (mounted) {
+          setState(() {
+            _isAdmin = data['role'] == 'admin';
+            _permissions = data['permissions'] ?? {};
+            _buildDynamicNavigation();
+            _isLoading = false;
           });
-          _isAdmin = true;
-          _permissions = {};
-        } 
-        else {
-          await FirebaseAuth.instance.signOut();
-          if (mounted) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('ببورە، ئەم ئیمەیڵە هیچ سەڵاحییەتێکی نییە!'), 
-              backgroundColor: Colors.red,
-            ));
-          }
-          return;
         }
-      }
+      });
 
-      _buildDynamicNavigation();
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     } catch (e) {
       debugPrint('Error loading permissions: $e');
       await FirebaseAuth.instance.signOut();
@@ -119,6 +115,9 @@ class _MainLayoutState extends State<MainLayout> {
     addScreen('users', 'بەکارهێنەران', Icons.people, const ManageUsersScreen());
     addScreen('map', 'نەخشە', Icons.map, const LiveTrackingScreen());
     addScreen('shifts', 'شەفتەکان', Icons.access_time_filled, const ManageShiftsScreen());
+    
+    // شاشەی ڕیزبەندی لێرەدا بۆ مینیۆکە زیاد کراوە
+    addScreen('leaderboard', 'ڕیزبەندی', Icons.emoji_events, const LeaderboardScreen()); 
 
     if (_isAdmin) {
       _activeScreens.add(const EmployeesScreen());
@@ -133,6 +132,11 @@ class _MainLayoutState extends State<MainLayout> {
       _activeScreens.add(const Center(child: Text('هیچ سەڵاحییەتێکت نییە', style: TextStyle(fontSize: 18, color: Colors.red))));
       _navRailItems.add(const NavigationRailDestination(icon: Icon(Icons.block), label: Text('داخراوە')));
       _bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.block), label: 'داخراوە'));
+    }
+
+    // دڵنیابوون لەوەی ئەگەر شاشەیەک سڕایەوە نەبێتە هۆی کراش
+    if (_currentIndex >= _activeScreens.length && _activeScreens.isNotEmpty) {
+      _currentIndex = 0;
     }
   }
 
@@ -165,7 +169,7 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       body: Row(
         children: [
-          if (!isMobile)
+          if (!isMobile && _navRailItems.isNotEmpty)
             NavigationRail(
               selectedIndex: _currentIndex,
               onDestinationSelected: (int index) => setState(() => _currentIndex = index),
@@ -183,12 +187,12 @@ class _MainLayoutState extends State<MainLayout> {
           Expanded(
             child: _activeScreens.isNotEmpty && _currentIndex < _activeScreens.length 
               ? _activeScreens[_currentIndex] 
-              : const Center(child: Text('شاشەکە بەردەست نییە')), 
+              : const Center(child: Text('هیچ بەشێک بەردەست نییە')), 
           ),
         ],
       ),
       
-      bottomNavigationBar: isMobile
+      bottomNavigationBar: isMobile && _bottomNavItems.isNotEmpty
           ? BottomNavigationBar(
               currentIndex: _currentIndex,
               onTap: (index) => setState(() => _currentIndex = index),
