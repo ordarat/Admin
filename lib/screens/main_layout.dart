@@ -13,7 +13,7 @@ import 'financial_report.dart';
 import 'settings_screen.dart';
 import 'employees_screen.dart';
 import 'admin_login.dart';
-import 'leaderboard_screen.dart'; // شاشە نوێیەکە لێرەدا زیاد کراوە
+import 'leaderboard_screen.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -32,13 +32,14 @@ class _MainLayoutState extends State<MainLayout> {
   final List<NavigationRailDestination> _navRailItems = [];
   final List<BottomNavigationBarItem> _bottomNavItems = [];
 
+  final Color primaryBlue = const Color(0xFF0056D2);
+
   @override
   void initState() {
     super.initState();
     _setupPermissionsListener();
   }
 
-  // سیستەمی گوێگرتنی ڕاستەوخۆ بۆ دەسەڵاتەکان
   Future<void> _setupPermissionsListener() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -47,12 +48,10 @@ class _MainLayoutState extends State<MainLayout> {
       String uid = user.uid;
       String email = user.email ?? '';
 
-      // یەکەم جار پشکنینی خاوەن کار دەکات
       var masterDoc = await FirebaseFirestore.instance.collection('App_Settings').doc('MasterAdmin').get();
       String masterEmail = masterDoc.exists ? (masterDoc.data()?['email'] ?? '') : '';
 
       if (masterEmail.isNotEmpty && email.toLowerCase() == masterEmail.toLowerCase()) { 
-        // ئەگەر تۆ خاوەنی کۆمپانیا بوویت، دڵنیادەبێتەوە کە لە داتابەیس ئەدمینیت
         await FirebaseFirestore.instance.collection('Admins').doc(uid).set({
           'name': 'بەڕێوەبەری سەرەکی',
           'email': email,
@@ -62,7 +61,6 @@ class _MainLayoutState extends State<MainLayout> {
         }, SetOptions(merge: true));
       } 
 
-      // ئینجا بە شێوەی ڕاستەوخۆ (Live) چاودێری ئەکاونتەکەی دەکات
       FirebaseFirestore.instance.collection('Admins').doc(uid).snapshots().listen((doc) async {
         if (!doc.exists) {
            await FirebaseAuth.instance.signOut();
@@ -73,7 +71,6 @@ class _MainLayoutState extends State<MainLayout> {
         var data = doc.data()!;
         bool isActive = data['is_active'] ?? false;
         
-        // ئەگەر باند کرا لەلایەن بەڕێوەبەرەوە، یەکسەر دەری بکە
         if (!isActive) {
            await FirebaseAuth.instance.signOut();
            if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminLoginScreen()));
@@ -115,8 +112,6 @@ class _MainLayoutState extends State<MainLayout> {
     addScreen('users', 'بەکارهێنەران', Icons.people, const ManageUsersScreen());
     addScreen('map', 'نەخشە', Icons.map, const LiveTrackingScreen());
     addScreen('shifts', 'شەفتەکان', Icons.access_time_filled, const ManageShiftsScreen());
-    
-    // شاشەی ڕیزبەندی لێرەدا بۆ مینیۆکە زیاد کراوە
     addScreen('leaderboard', 'ڕیزبەندی', Icons.emoji_events, const LeaderboardScreen()); 
 
     if (_isAdmin) {
@@ -134,7 +129,6 @@ class _MainLayoutState extends State<MainLayout> {
       _bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.block), label: 'داخراوە'));
     }
 
-    // دڵنیابوون لەوەی ئەگەر شاشەیەک سڕایەوە نەبێتە هۆی کراش
     if (_currentIndex >= _activeScreens.length && _activeScreens.isNotEmpty) {
       _currentIndex = 0;
     }
@@ -143,7 +137,7 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(backgroundColor: Color(0xFFF4F7FC), body: Center(child: CircularProgressIndicator(color: Colors.indigo)));
+      return const Scaffold(backgroundColor: Color(0xFFF4F7FC), body: Center(child: CircularProgressIndicator(color: Color(0xFF0056D2))));
     }
 
     bool isMobile = MediaQuery.of(context).size.width < 800;
@@ -151,10 +145,17 @@ class _MainLayoutState extends State<MainLayout> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E1E2C),
-        foregroundColor: Colors.white,
-        title: const Text('ئۆردەرات - پەنەڵی سەرەکی', style: TextStyle(fontWeight: FontWeight.bold)),
-        elevation: 0,
+        backgroundColor: Colors.white, 
+        foregroundColor: primaryBlue, 
+        elevation: 2,
+        shadowColor: Colors.black12,
+        title: Row(
+          children: [
+            Image.asset('assets/images/logo.png', height: 40), 
+            const SizedBox(width: 15),
+            Text('ئۆردەرات - پەنەڵی سەرەکی', style: TextStyle(fontWeight: FontWeight.bold, color: primaryBlue)),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'چوونەدەرەوە',
@@ -176,9 +177,9 @@ class _MainLayoutState extends State<MainLayout> {
               labelType: NavigationRailLabelType.all,
               backgroundColor: const Color(0xFF1E1E2C),
               unselectedIconTheme: const IconThemeData(color: Colors.white54),
-              selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
+              selectedIconTheme: IconThemeData(color: primaryBlue),
               unselectedLabelTextStyle: const TextStyle(color: Colors.white54),
-              selectedLabelTextStyle: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
+              selectedLabelTextStyle: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold),
               destinations: _navRailItems,
             ),
             
@@ -196,7 +197,7 @@ class _MainLayoutState extends State<MainLayout> {
           ? BottomNavigationBar(
               currentIndex: _currentIndex,
               onTap: (index) => setState(() => _currentIndex = index),
-              selectedItemColor: Colors.blueAccent,
+              selectedItemColor: primaryBlue,
               unselectedItemColor: Colors.grey,
               backgroundColor: Colors.white,
               type: BottomNavigationBarType.fixed, 
