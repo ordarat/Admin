@@ -24,12 +24,14 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   List<String> _dynamicShifts = ['کاتی ئازاد (بێ شەفت)'];
   List<String> _shiftFilters = ['هەموو شەفتەکان', 'کاتی ئازاد (بێ شەفت)'];
 
+  // لێرەدا دەسەڵاتی ڕیزبەندی زیاد کراوە
   final Map<String, String> _allPermissions = {
     'dashboard': 'شاشەی داشبۆرد',
     'orders': 'بۆردی ئۆردەرەکان',
     'users': 'بەڕێوەبردنی بەکارهێنەران',
     'map': 'نەخشەی راستەوخۆ',
     'shifts': 'بەڕێوەبردنی شەفتەکان',
+    'leaderboard': 'بینینی ڕیزبەندی و خەڵاتکردن', 
     'finance': 'راپۆرتی دارایی و قازانج',
     'settings': 'رێکخستنەکانی سیستەم',
   };
@@ -40,7 +42,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     _loadDynamicShifts();
   }
 
-  // خوێندنەوەی شەفتەکان ڕاستەوخۆ لە داتابەیسەوە
   void _loadDynamicShifts() {
     FirebaseFirestore.instance.collection('Shifts').snapshots().listen((snapshot) {
       List<String> shifts = ['کاتی ئازاد (بێ شەفت)'];
@@ -97,7 +98,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // دانانی شەفت بۆ کارمەند
                       DropdownButtonFormField<String>(
                         value: selectedShift,
                         decoration: const InputDecoration(labelText: 'شەفتی کارکردن', prefixIcon: Icon(Icons.access_time, color: Colors.indigo)),
@@ -241,7 +241,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
             const Text('پۆلێنکردنی کارمەندان بەپێی پلە و شەفتی کارکردنیان.', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 20),
             
-            // بەشی فلتەر و گەڕان
             Container(
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[200]!)),
@@ -282,7 +281,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
             if (_isLoading) const Center(child: LinearProgressIndicator()),
             const SizedBox(height: 10),
 
-            // لیستی کارمەندان
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('Admins').orderBy('created_at', descending: true).snapshots(),
