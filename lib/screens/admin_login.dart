@@ -12,24 +12,28 @@ class AdminLoginScreen extends StatefulWidget {
 }
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _passCtrl = TextEditingController();
   bool _isLoading = false;
-  bool _isPasswordHidden = true;
+  bool _obscurePass = true;
 
   Future<void> _login() async {
-    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) return;
-
+    if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) return;
+    
     setState(() => _isLoading = true);
+    
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        email: _emailCtrl.text.trim(),
+        password: _passCtrl.text.trim(),
       );
       if (!mounted) return;
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainLayout()));
+      // چوونەژوورەوەی خێرا بەبێ وەستان
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainLayout()));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('زانیارییەکان هەڵەن'), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ئیمەیڵ یان پاسۆرد هەڵەیە!'), backgroundColor: Colors.red));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -37,37 +41,72 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // بەکارهێنانی const بۆ ئەوەی دیزاینەکە قورس نەبێت لەسەر ڕام (RAM)
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E2C),
+      backgroundColor: const Color(0xFFF4F7FC),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20)]),
+            width: 400,
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 10))],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(padding: const EdgeInsets.all(15), decoration: const BoxDecoration(color: Colors.deepOrange, shape: BoxShape.circle), child: const Icon(Icons.admin_panel_settings, size: 60, color: Colors.white)),
+                const Icon(Icons.admin_panel_settings, size: 80, color: Color(0xFF0056D2)),
                 const SizedBox(height: 20),
-                const Text('ئۆردەرات ئەدمین', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+                const Text('پەنەڵی بەڕێوەبەرایەتی', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+                const SizedBox(height: 10),
+                const Text('تکایە زانیارییەکانت بنووسە بۆ چوونەژوورەوە', style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 30),
-                TextField(controller: _emailController, decoration: InputDecoration(labelText: 'ئیمەیڵ', prefixIcon: const Icon(Icons.email, color: Colors.deepOrange), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
-                const SizedBox(height: 20),
+                
                 TextField(
-                  controller: _passwordController, obscureText: _isPasswordHidden,
-                  decoration: InputDecoration(labelText: 'وشەی نهێنی', prefixIcon: const Icon(Icons.lock, color: Colors.deepOrange), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  suffixIcon: IconButton(icon: Icon(_isPasswordHidden ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _isPasswordHidden = !_isPasswordHidden))),
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'ئیمەیڵ', 
+                    prefixIcon: const Icon(Icons.email, color: Color(0xFF0056D2)), 
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    filled: true, fillColor: Colors.grey[50],
+                  ),
+                ),
+                const SizedBox(height: 15),
+                
+                TextField(
+                  controller: _passCtrl,
+                  obscureText: _obscurePass,
+                  decoration: InputDecoration(
+                    labelText: 'وشەی نهێنی', 
+                    prefixIcon: const Icon(Icons.lock, color: Color(0xFF0056D2)), 
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    filled: true, fillColor: Colors.grey[50],
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePass ? Icons.visibility : Icons.visibility_off, color: Colors.grey),
+                      onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 30),
+                
                 SizedBox(
-                  width: double.infinity, height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    onPressed: _isLoading ? null : _login,
-                    child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('چوونە ژوورەوە', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                  ),
+                  width: double.infinity,
+                  height: 50,
+                  child: _isLoading 
+                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF0056D2)))
+                    : ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0056D2), 
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 5,
+                        ),
+                        onPressed: _login,
+                        child: const Text('چوونەژوورەوە', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
                 ),
               ],
             ),
